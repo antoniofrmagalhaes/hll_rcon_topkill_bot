@@ -1,10 +1,9 @@
 {
   "name": "hll-bots",
   "version": "1.0.0",
-  "description": "Discovery + bot para CRCON/HLL (top 10 matadores)",
+  "description": "Bot para CRCON/HLL com ranking top kills e anuncio automatico",
   "main": "src/bot.js",
   "scripts": {
-    "discover": "node src/discover.js",
     "bot": "node src/bot.js",
     "clear": "node src/clear.js"
   },

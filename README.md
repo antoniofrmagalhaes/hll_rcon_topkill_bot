@@ -1,16 +1,17 @@
 <div align="center">
-  <h1>HLL RCON TopKill Bot</h1>
+  <h1>HLL RCON Top Bot</h1>
   <p>
-    Bot Node.js para <strong>CRCON / Hell Let Loose</strong> com discovery de API,
-    ranking de abates sob demanda e anúncio automático ao final da partida.
+    Bot Node.js para <strong>CRCON / Hell Let Loose</strong> focado em
+    responder <code>!top</code> no chat e publicar automaticamente o ranking
+    de abates ao final da partida.
   </p>
   <p>
     <a href="https://github.com/antoniofrmagalhaes/hll_rcon_topkill_bot">
       <img src="https://img.shields.io/badge/repository-github-black?style=for-the-badge&logo=github" alt="GitHub repository" />
     </a>
     <img src="https://img.shields.io/badge/node-%3E%3D18-43853d?style=for-the-badge&logo=node.js&logoColor=white" alt="Node 18+" />
-    <img src="https://img.shields.io/badge/runtime-bot-0f766e?style=for-the-badge" alt="Bot runtime" />
-    <img src="https://img.shields.io/badge/status-production%20ready-1d4ed8?style=for-the-badge" alt="Production ready" />
+    <img src="https://img.shields.io/badge/focus-bot%20runtime-0f766e?style=for-the-badge" alt="Bot runtime" />
+    <img src="https://img.shields.io/badge/branch-main%20is%20production-1d4ed8?style=for-the-badge" alt="Main is production" />
   </p>
 </div>
 
@@ -19,79 +20,55 @@
 ## Sumário
 
 - [Visão Geral](#visão-geral)
-- [Principais Capacidades](#principais-capacidades)
+- [O Que o Bot Faz](#o-que-o-bot-faz)
 - [Arquitetura](#arquitetura)
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Requisitos](#requisitos)
 - [Configuração](#configuração)
-- [Executando Localmente](#executando-localmente)
-- [Fluxo Operacional](#fluxo-operacional)
+- [Como Executar](#como-executar)
+- [Fluxo de Funcionamento](#fluxo-de-funcionamento)
 - [Variáveis de Ambiente](#variáveis-de-ambiente)
 - [Deploy em VPS](#deploy-em-vps)
 - [Operação e Manutenção](#operação-e-manutenção)
 - [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
+- [Estratégia de Branches](#estratégia-de-branches)
 
 ## Visão Geral
 
-Este projeto automatiza um fluxo simples e útil para servidores de Hell Let Loose conectados ao CRCON:
+Esta branch `main` representa somente o produto operacional: o bot que observa
+os logs do CRCON, identifica o comando `!top`, responde em mensagem privada e
+anuncia o ranking quando a partida termina.
 
-- descobre e valida endpoints da API;
-- monitora logs recentes para capturar o comando `!top`;
-- envia o ranking de abates em mensagem privada para quem acionou o comando;
-- detecta `MATCH ENDED` e publica automaticamente o top da partida;
-- evita duplicações com cooldown, memória de eventos e persistência de estado.
+O objetivo aqui é manter a branch principal limpa, direta e pronta para deploy,
+sem misturar código exploratório, artefatos de discovery ou experimentos de API.
 
 <table>
   <tr>
-    <td><strong>Objetivo</strong></td>
-    <td>Transformar eventos do CRCON em respostas automáticas com baixo custo operacional.</td>
+    <td><strong>Foco da main</strong></td>
+    <td>Runtime do bot em produção.</td>
   </tr>
   <tr>
-    <td><strong>Modelo de execução</strong></td>
-    <td>Worker Node.js com polling contínuo dos logs do servidor.</td>
+    <td><strong>Entrada principal</strong></td>
+    <td><code>src/bot.js</code></td>
   </tr>
   <tr>
-    <td><strong>Estado local</strong></td>
-    <td>Arquivos em <code>artifacts/</code> para lock de processo e deduplicação de fim de partida.</td>
+    <td><strong>Persistência local</strong></td>
+    <td>Arquivos de estado e lock em <code>artifacts/</code>.</td>
   </tr>
   <tr>
-    <td><strong>Fonte principal de ranking</strong></td>
-    <td><code>get_live_game_stats</code>, com fallback quando necessário.</td>
+    <td><strong>Uso esperado</strong></td>
+    <td>Deploy em VPS com supervisor de processo.</td>
   </tr>
 </table>
 
-## Principais Capacidades
+## O Que o Bot Faz
 
-<details open>
-  <summary><strong>Comando <code>!top</code> no chat</strong></summary>
-
-- lê logs recentes via `get_recent_logs`;
-- identifica mensagens de chat com `!top`;
-- calcula os melhores jogadores por abates;
-- responde por mensagem privada ao jogador que enviou o comando.
-
-</details>
-
-<details open>
-  <summary><strong>Anúncio automático em <code>MATCH ENDED</code></strong></summary>
-
-- detecta eventos de fim de partida no mesmo ciclo de polling;
-- monta o ranking da partida;
-- publica o top para o servidor;
-- evita republicação indevida após restart usando estado persistido.
-
-</details>
-
-<details>
-  <summary><strong>Proteções operacionais</strong></summary>
-
-- lock de instância para impedir dois processos concorrentes;
-- cooldown por jogador para reduzir spam do `!top`;
-- deduplicação de eventos de chat e de `MATCH ENDED`;
-- modo `dry-run` para validar comportamento sem enviar mensagens reais.
-
-</details>
+- monitora logs recentes do CRCON;
+- detecta o comando `!top` enviado no chat;
+- calcula o ranking dos jogadores com mais abates;
+- responde o resultado por mensagem privada para quem executou o comando;
+- detecta `MATCH ENDED` e publica o top automaticamente;
+- evita spam e duplicidade com cooldown, lock de processo e estado persistido.
 
 ## Arquitetura
 
@@ -109,7 +86,8 @@ src/bot.js
   ├─ detecção de !top
   ├─ detecção de MATCH ENDED
   ├─ cooldown / deduplicação
-  └─ persistência de estado
+  ├─ persistência de estado
+  └─ envio de mensagens
         │
         ├─ src/rconClient.js
         ├─ src/top.js
@@ -118,10 +96,11 @@ src/bot.js
 
 ### Decisões de implementação
 
-- O bot faz `1` request de logs por ciclo de polling.
-- Requests de scoreboard e envio de mensagens só acontecem quando há evento relevante.
-- O ranking ordena por `kills`, depois `kd`, depois menor número de mortes e por fim nome.
-- O processo usa arquivo de lock para impedir múltiplas instâncias respondendo ao mesmo tempo.
+- O bot faz uma chamada de logs por ciclo.
+- O ranking usa `get_live_game_stats` como fonte principal.
+- Se `get_live_game_stats` vier sem `stats`, o bot tenta `get_live_scoreboard`.
+- O processo grava estado local para evitar republicar o mesmo `MATCH ENDED`.
+- Um arquivo de lock impede duas instâncias respondendo ao mesmo tempo.
 
 ## Estrutura do Projeto
 
@@ -130,36 +109,31 @@ src/bot.js
 ├── .env.example
 ├── .gitignore
 ├── README.md
-├── get_api_documentation.json
-├── instructions.md
 ├── package.json
 ├── src
 │   ├── bot.js
 │   ├── clear.js
 │   ├── config.js
-│   ├── discover.js
 │   ├── rconClient.js
 │   └── top.js
 └── artifacts
-    ├── api-docs.json
     ├── bot-state.json
     └── bot.lock
 ```
 
 ### Responsabilidade dos módulos
 
-- `src/bot.js`: loop principal, eventos, cooldown, estado e lock de processo.
-- `src/discover.js`: discovery dos endpoints disponíveis na API.
-- `src/rconClient.js`: cliente HTTP com autenticação Bearer e logging resumido.
-- `src/top.js`: normalização, cálculo e formatação do ranking.
+- `src/bot.js`: loop principal, eventos, cooldown, estado e lock.
+- `src/rconClient.js`: cliente HTTP autenticado com logging resumido.
+- `src/top.js`: normalização, ordenação e formatação do ranking.
 - `src/config.js`: leitura e validação das variáveis de ambiente.
-- `src/clear.js`: encerramento/limpeza operacional do bot.
+- `src/clear.js`: utilitário operacional de limpeza/encerramento.
 
 ## Requisitos
 
 - Node.js `18+`
 - acesso à API do CRCON
-- token com permissões compatíveis com:
+- token com permissões para:
   - `get_recent_logs`
   - `get_live_game_stats`
   - `message_all_players`
@@ -173,16 +147,16 @@ src/bot.js
 cp .env.example .env
 ```
 
-2. Ajuste as variáveis obrigatórias:
+2. Preencha as variáveis obrigatórias:
 
 ```env
 RCON_API_TOKEN=seu_token_aqui
 RCON_BASE_URL=https://seu-crcon.exemplo.com.br
 ```
 
-3. Revise os parâmetros operacionais opcionais de acordo com o perfil do servidor.
+3. Ajuste os parâmetros operacionais conforme o comportamento esperado do servidor.
 
-## Executando Localmente
+## Como Executar
 
 ### Instalação
 
@@ -190,21 +164,13 @@ RCON_BASE_URL=https://seu-crcon.exemplo.com.br
 npm install
 ```
 
-### Discovery da API
-
-```bash
-npm run discover
-```
-
-Esse comando ajuda a inspecionar os endpoints retornados pelo CRCON e registrar artefatos locais para referência.
-
 ### Iniciar o bot
 
 ```bash
 npm run bot
 ```
 
-### Encerrar o processo do bot
+### Encerrar/limpar estado operacional
 
 ```bash
 npm run clear
@@ -212,58 +178,58 @@ npm run clear
 
 ### Smoke test manual
 
-1. Preencha `RCON_BASE_URL` e `RCON_API_TOKEN`.
-2. Suba o bot com `npm run bot`.
+1. Configure `RCON_BASE_URL` e `RCON_API_TOKEN`.
+2. Execute `npm run bot`.
 3. No jogo, envie `!top` no chat.
 4. Verifique o terminal.
-5. Confirme que não houve erro `fetch failed`.
+5. Confirme a mensagem privada entregue ao jogador.
 
-## Fluxo Operacional
+## Fluxo de Funcionamento
 
 ### 1. Polling de logs
 
-O processo consulta `get_recent_logs` em intervalo configurável por `BOT_POLL_INTERVAL_MS`.
+O bot consulta `get_recent_logs` em intervalo configurável por `BOT_POLL_INTERVAL_MS`.
 
-### 2. Interceptação do comando `!top`
+### 2. Comando `!top`
 
-Quando o bot encontra uma mensagem de chat cujo conteúdo é `!top`:
+Quando encontra uma mensagem de chat com `!top`, o processo:
 
 - identifica o jogador emissor;
-- impede duplicidade por evento e por cooldown do ator;
-- lê os dados de ranking;
-- formata a mensagem final;
-- envia a resposta via `message_player`.
+- aplica deduplicação por evento;
+- aplica cooldown por ator;
+- calcula o ranking;
+- responde usando `message_player`.
 
-### 3. Detecção de fim de partida
+### 3. Fim de partida
 
-Quando o bot encontra um evento `MATCH ENDED`:
+Quando encontra `MATCH ENDED`, o processo:
 
-- deduplica o evento;
-- consulta os dados da partida;
-- monta o anúncio;
-- publica o ranking;
-- persiste o identificador do último evento processado.
+- verifica se o evento já foi processado;
+- monta o ranking da partida;
+- publica o anúncio;
+- persiste o último evento tratado.
 
-### 4. Fallback de dados
+### 4. Fallback de ranking
 
-O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`, o processo tenta fallback com `get_live_scoreboard`.
+O fluxo principal usa `get_live_game_stats`. Quando esse retorno não vier com dados
+de `stats`, o bot tenta fallback usando `get_live_scoreboard`.
 
 ## Variáveis de Ambiente
 
 | Variável | Obrigatória | Default | Descrição |
 | --- | --- | --- | --- |
 | `RCON_API_TOKEN` | Sim | - | Token Bearer da API do CRCON. |
-| `RCON_BASE_URL` | Sim | - | Base URL do painel/instância CRCON. |
+| `RCON_BASE_URL` | Sim | - | Base URL da instância CRCON. |
 | `BOT_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs. |
-| `BOT_LOG_WINDOW` | Não | `120` | Janela de logs recentes consultados por ciclo. |
+| `BOT_LOG_WINDOW` | Não | `120` | Janela de logs recentes por ciclo. |
 | `BOT_LOCK_FILE` | Não | `artifacts/bot.lock` | Arquivo usado para lock de processo. |
 | `BOT_TOP_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!top`. |
-| `BOT_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown para evitar republicações de `MATCH ENDED`. |
-| `TOP_LIMIT` | Não | `10` | Quantidade de jogadores exibidos no ranking. |
-| `TOP_INCLUDE_HEADER` | Não | `true` | Adiciona ou remove cabeçalho da mensagem formatada. |
-| `TOP_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário para coletar dados do ranking. |
-| `BOT_DRY_RUN` | Não | `false` | Não envia mensagens reais; apenas loga as ações. |
-| `BOT_STATE_FILE` | Não | `artifacts/bot-state.json` | Persistência de estado para deduplicação entre restarts. |
+| `BOT_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown para `MATCH ENDED`. |
+| `TOP_LIMIT` | Não | `10` | Quantidade de jogadores exibidos. |
+| `TOP_INCLUDE_HEADER` | Não | `true` | Inclui cabeçalho na mensagem formatada. |
+| `TOP_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário do ranking. |
+| `BOT_DRY_RUN` | Não | `false` | Não envia mensagens reais; apenas loga. |
+| `BOT_STATE_FILE` | Não | `artifacts/bot-state.json` | Arquivo de persistência de estado. |
 
 ## Deploy em VPS
 
@@ -277,23 +243,23 @@ npm install
 npm run bot
 ```
 
-### Recomendação de produção
+### Recomendação para produção
 
-Para manter o processo persistente, use um supervisor como `pm2` ou `systemd`.
+Use `pm2` ou `systemd` para garantir restart automático e processo persistente.
 
 #### Exemplo com PM2
 
 ```bash
 npm install
-pm2 start npm --name hll-topkill-bot -- run bot
+pm2 start npm --name hll-top-bot -- run bot
 pm2 save
 ```
 
-#### Exemplo de unit com systemd
+#### Exemplo com systemd
 
 ```ini
 [Unit]
-Description=HLL RCON TopKill Bot
+Description=HLL RCON Top Bot
 After=network.target
 
 [Service]
@@ -310,57 +276,63 @@ WantedBy=multi-user.target
 
 ## Operação e Manutenção
 
-### Artefatos gerados em runtime
+### Artefatos de runtime
 
-- `artifacts/bot.lock`: impede mais de uma instância rodando ao mesmo tempo.
-- `artifacts/bot-state.json`: persiste o último `MATCH ENDED` processado.
-- `artifacts/api-docs.json`: snapshot de discovery para referência local.
+- `artifacts/bot.lock`: evita concorrência entre múltiplas instâncias.
+- `artifacts/bot-state.json`: guarda o último `MATCH ENDED` processado.
 
 ### Boas práticas
 
-- não versione `.env`;
-- mantenha `BOT_DRY_RUN=true` ao validar em ambiente novo;
-- revise permissões do token antes de diagnosticar erro de endpoint;
-- monitore logs do processo para identificar timeouts ou retornos `failed=true`.
+- mantenha `.env` fora do versionamento;
+- use `BOT_DRY_RUN=true` ao validar um ambiente novo;
+- monitore logs do processo em produção;
+- revise permissões do token sempre que houver erro de API.
 
 ## Troubleshooting
 
 ### `Missing required env var`
 
-Confira se `RCON_API_TOKEN` e `RCON_BASE_URL` existem no `.env` e estão preenchidos.
+Revise o `.env` e confirme se `RCON_API_TOKEN` e `RCON_BASE_URL` estão preenchidos.
 
 ### `fetch failed`
 
-- valide conectividade da VPS até o CRCON;
-- confirme DNS, firewall e TLS;
-- teste a base URL manualmente com `curl`.
+- valide conectividade entre a VPS e o CRCON;
+- confira DNS, firewall e TLS;
+- teste a URL manualmente com `curl`.
 
 ### O bot não responde ao `!top`
 
-- confirme se os logs de chat chegam em `get_recent_logs`;
-- verifique se o conteúdo da mensagem está chegando como `!top`;
-- revise se o usuário caiu no cooldown configurado.
+- valide se o evento está chegando em `get_recent_logs`;
+- confirme se a mensagem realmente chega como `!top`;
+- revise o cooldown configurado.
 
-### O anúncio de fim de partida não saiu
+### O anúncio de `MATCH ENDED` não saiu
 
-- confira se o evento realmente apareceu nos logs;
-- valide `BOT_MATCH_ENDED_COOLDOWN_MS`;
-- inspecione o arquivo de estado em `artifacts/bot-state.json`.
+- confira se o evento apareceu nos logs;
+- revise o cooldown de fim de partida;
+- inspecione `artifacts/bot-state.json`.
 
-### Duas instâncias parecem estar rodando
+### Há indício de duas instâncias rodando
 
-Verifique o arquivo de lock em `artifacts/bot.lock` e o supervisor de processos da máquina.
+Confira o lock em `artifacts/bot.lock` e o supervisor de processos da VPS.
 
-## Roadmap
+## Estratégia de Branches
 
-- persistir estado em Redis para deduplicação mais forte;
-- expor endpoint interno de healthcheck;
-- melhorar observabilidade e métricas;
-- avaliar empacotamento em container;
-- considerar exposição do fluxo como MCP server.
+### `main`
+
+Branch principal e operacional. Deve conter apenas o bot pronto para deploy.
+
+### `discovery`
+
+Branch separada para exploração de API, testes de discovery, artefatos exploratórios
+e hipóteses que não pertencem ao runtime principal.
+
+Se no futuro o discovery voltar a ser útil, ele deve evoluir nessa branch sem
+contaminar a `main`. A documentação desta branch principal deve continuar
+majoritariamente orientada ao funcionamento do bot.
 
 ---
 
 <div align="center">
-  <sub>Construído para operação simples, baixa fricção de deploy e comportamento previsível em produção.</sub>
+  <sub>Main para produção. Discovery isolado. Documentação alinhada ao runtime real do bot.</sub>
 </div>
