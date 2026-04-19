@@ -247,31 +247,58 @@ npm run bot
 
 Use `pm2` ou `systemd` para garantir restart automático e processo persistente.
 
-#### Exemplo com PM2
+### Provisionamento com scripts
 
 ```bash
-npm install
-pm2 start npm --name hll-top-bot -- run bot
-pm2 save
+chmod +x deploy/install-systemd.sh deploy/install-pm2.sh
 ```
 
-#### Exemplo com systemd
+#### Instalar com `systemd`
 
-```ini
-[Unit]
-Description=HLL RCON Top Bot
-After=network.target
+```bash
+./deploy/install-systemd.sh
+```
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/hll_rcon_topkill_bot
-ExecStart=/usr/bin/npm run bot
-Restart=always
-User=www-data
-Environment=NODE_ENV=production
+Variáveis opcionais:
 
-[Install]
-WantedBy=multi-user.target
+- `SERVICE_NAME=hll-top-bot`
+- `APP_DIR=/opt/hll_rcon_topkill_bot`
+- `APP_USER=www-data`
+- `ENV_FILE=/opt/hll_rcon_topkill_bot/.env`
+- `NODE_ENV_VALUE=production`
+
+Exemplo:
+
+```bash
+SERVICE_NAME=hll-top-bot \
+APP_DIR=/opt/hll_rcon_topkill_bot \
+APP_USER=www-data \
+ENV_FILE=/opt/hll_rcon_topkill_bot/.env \
+./deploy/install-systemd.sh
+```
+
+#### Instalar com `pm2`
+
+```bash
+./deploy/install-pm2.sh
+```
+
+Variáveis opcionais:
+
+- `APP_NAME=hll-top-bot`
+- `APP_DIR=/opt/hll_rcon_topkill_bot`
+- `ENV_FILE=/opt/hll_rcon_topkill_bot/.env`
+- `PM2_STARTUP_USER=www-data`
+- `NODE_ENV_VALUE=production`
+
+Exemplo:
+
+```bash
+APP_NAME=hll-top-bot \
+APP_DIR=/opt/hll_rcon_topkill_bot \
+ENV_FILE=/opt/hll_rcon_topkill_bot/.env \
+PM2_STARTUP_USER=www-data \
+./deploy/install-pm2.sh
 ```
 
 ## Operação e Manutenção
