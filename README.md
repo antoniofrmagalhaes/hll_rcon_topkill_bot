@@ -259,6 +259,40 @@ chmod +x deploy/install-systemd.sh deploy/install-pm2.sh
 ./deploy/install-systemd.sh
 ```
 
+Comando bash equivalente:
+
+```bash
+SERVICE_NAME=hll-top-bot
+APP_DIR=/opt/hll_rcon_topkill_bot
+APP_USER=www-data
+ENV_FILE=/opt/hll_rcon_topkill_bot/.env
+NODE_ENV_VALUE=production
+NPM_BIN="$(command -v npm)"
+
+cat <<EOF | sudo tee /etc/systemd/system/${SERVICE_NAME}.service >/dev/null
+[Unit]
+Description=HLL RCON Top Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${APP_DIR}
+ExecStart=${NPM_BIN} run bot
+Restart=always
+RestartSec=5
+User=${APP_USER}
+Environment=NODE_ENV=${NODE_ENV_VALUE}
+EnvironmentFile=${ENV_FILE}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now "${SERVICE_NAME}"
+sudo systemctl status "${SERVICE_NAME}" --no-pager
+```
+
 Variáveis opcionais:
 
 - `SERVICE_NAME=hll-top-bot`
@@ -281,6 +315,33 @@ ENV_FILE=/opt/hll_rcon_topkill_bot/.env \
 
 ```bash
 ./deploy/install-pm2.sh
+```
+
+Comando bash equivalente:
+
+```bash
+APP_NAME=hll-top-bot
+APP_DIR=/opt/hll_rcon_topkill_bot
+ENV_FILE=/opt/hll_rcon_topkill_bot/.env
+PM2_STARTUP_USER=www-data
+NODE_ENV_VALUE=production
+
+cd "${APP_DIR}"
+
+if ! command -v pm2 >/dev/null 2>&1; then
+  npm install -g pm2
+fi
+
+set -a
+. "${ENV_FILE}"
+set +a
+export NODE_ENV="${NODE_ENV_VALUE}"
+
+pm2 delete "${APP_NAME}" >/dev/null 2>&1 || true
+pm2 start npm --name "${APP_NAME}" --update-env -- run bot
+pm2 save
+pm2 startup systemd -u "${PM2_STARTUP_USER}" --hp "$HOME"
+pm2 status
 ```
 
 Variáveis opcionais:
