@@ -1,0 +1,14 @@
+node_modules/
+
+# Local environment secrets
+.env
+
+# Runtime/generated artifacts
+artifacts/
+
+# Local agent/editor files
+.codex
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

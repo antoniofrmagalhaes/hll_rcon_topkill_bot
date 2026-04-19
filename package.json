@@ -1,0 +1,17 @@
+{
+  "name": "hll-bots",
+  "version": "1.0.0",
+  "description": "Discovery + bot para CRCON/HLL (top 10 matadores)",
+  "main": "src/bot.js",
+  "scripts": {
+    "discover": "node src/discover.js",
+    "bot": "node src/bot.js",
+    "clear": "node src/clear.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
