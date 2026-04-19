@@ -259,13 +259,19 @@ chmod +x deploy/install-systemd.sh deploy/install-pm2.sh
 ./deploy/install-systemd.sh
 ```
 
+Esse comando usa por padrão:
+
+- `APP_DIR="$(pwd)"`
+- `APP_USER="$(whoami)"`
+- `ENV_FILE="$(pwd)/.env"`
+
 Comando bash equivalente:
 
 ```bash
 SERVICE_NAME=hll-top-bot
-APP_DIR=/opt/hll_rcon_topkill_bot
-APP_USER=www-data
-ENV_FILE=/opt/hll_rcon_topkill_bot/.env
+APP_DIR="$(pwd)"
+APP_USER="$(whoami)"
+ENV_FILE="${APP_DIR}/.env"
 NODE_ENV_VALUE=production
 NPM_BIN="$(command -v npm)"
 
@@ -296,12 +302,22 @@ sudo systemctl status "${SERVICE_NAME}" --no-pager
 Variáveis opcionais:
 
 - `SERVICE_NAME=hll-top-bot`
-- `APP_DIR=/opt/hll_rcon_topkill_bot`
-- `APP_USER=www-data`
-- `ENV_FILE=/opt/hll_rcon_topkill_bot/.env`
+- `APP_DIR=$(pwd)`
+- `APP_USER=$(whoami)`
+- `ENV_FILE=$(pwd)/.env`
 - `NODE_ENV_VALUE=production`
 
-Exemplo:
+Exemplo para instalação no diretório atual:
+
+```bash
+SERVICE_NAME=hll-top-bot \
+APP_DIR="$(pwd)" \
+APP_USER="$(whoami)" \
+ENV_FILE="$(pwd)/.env" \
+./deploy/install-systemd.sh
+```
+
+Exemplo para diretório/usuário customizados:
 
 ```bash
 SERVICE_NAME=hll-top-bot \
@@ -317,13 +333,19 @@ ENV_FILE=/opt/hll_rcon_topkill_bot/.env \
 ./deploy/install-pm2.sh
 ```
 
+Esse comando usa por padrão:
+
+- `APP_DIR="$(pwd)"`
+- `ENV_FILE="$(pwd)/.env"`
+- `PM2_STARTUP_USER="$(whoami)"`
+
 Comando bash equivalente:
 
 ```bash
 APP_NAME=hll-top-bot
-APP_DIR=/opt/hll_rcon_topkill_bot
-ENV_FILE=/opt/hll_rcon_topkill_bot/.env
-PM2_STARTUP_USER=www-data
+APP_DIR="$(pwd)"
+ENV_FILE="${APP_DIR}/.env"
+PM2_STARTUP_USER="$(whoami)"
 NODE_ENV_VALUE=production
 
 cd "${APP_DIR}"
@@ -347,12 +369,22 @@ pm2 status
 Variáveis opcionais:
 
 - `APP_NAME=hll-top-bot`
-- `APP_DIR=/opt/hll_rcon_topkill_bot`
-- `ENV_FILE=/opt/hll_rcon_topkill_bot/.env`
-- `PM2_STARTUP_USER=www-data`
+- `APP_DIR=$(pwd)`
+- `ENV_FILE=$(pwd)/.env`
+- `PM2_STARTUP_USER=$(whoami)`
 - `NODE_ENV_VALUE=production`
 
-Exemplo:
+Exemplo para instalação no diretório atual:
+
+```bash
+APP_NAME=hll-top-bot \
+APP_DIR="$(pwd)" \
+ENV_FILE="$(pwd)/.env" \
+PM2_STARTUP_USER="$(whoami)" \
+./deploy/install-pm2.sh
+```
+
+Exemplo para diretório/usuário customizados:
 
 ```bash
 APP_NAME=hll-top-bot \
