@@ -32,6 +32,11 @@ function logInfo(message, data) {
   console.log(`[${nowIso()}] ${message}`);
 }
 
+function logFormattedMessagePreview(message, title = "message preview") {
+  console.log(`[${nowIso()}] [top] ${title}`);
+  console.log(message);
+}
+
 function remember(set, key, max = 1000) {
   set.add(key);
   if (set.size > max) {
@@ -336,7 +341,8 @@ function summarizeBestSquads(teamViewResponse) {
   return bestSquadsByTeam;
 }
 
-async function broadcastTop(client, cfg, reason, targetPlayer) {
+async function broadcastTop(client, cfg, reason, targetPlayer, options = {}) {
+  const { logFormattedPreview = false } = options;
   logInfo("[top] collecting live match stats", {
     reason,
     targetPlayer: targetPlayer || null,
@@ -411,6 +417,9 @@ async function broadcastTop(client, cfg, reason, targetPlayer) {
     bestSquadsByTeam,
     message,
   });
+  if (logFormattedPreview) {
+    logFormattedMessagePreview(message, "formatted !top message preview");
+  }
 
   if (cfg.dryRun) {
     logInfo("[dry-run] would send message");
@@ -502,7 +511,7 @@ async function pollLogs(client, cfg) {
       await broadcastTop(client, cfg, by, {
         playerId: log.player_id_1 || "",
         playerName: log.player_name_1 || "",
-      });
+      }, { logFormattedPreview: true });
       continue;
     }
 
