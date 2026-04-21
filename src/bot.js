@@ -9,6 +9,7 @@ const { normalizePlayers, computeTopKillers, formatTopMessage } = require("./top
 
 const seenChatEvents = new Set();
 const seenTopCommands = new Set();
+const seenOpCommands = new Set();
 const topCommandCooldownByActor = new Map();
 const seenMatchEndEvents = new Set();
 let logsWarmedUp = false;
@@ -214,6 +215,89 @@ function isTopCommand(log) {
 
   const content = String(log.sub_content || "").trim().toLowerCase();
   return content === "!top" || content.startsWith("!top ");
+}
+
+function isOpCommand(log) {
+  if (!log || typeof log !== "object") return false;
+  if (!String(log.action || "").startsWith("CHAT")) return false;
+
+  const content = String(log.sub_content || "").trim().toLowerCase();
+  return content === "!op" || content.startsWith("!op ");
+}
+
+function opCommandKey(log) {
+  const playerRef = String(log?.player_id_1 || "").trim() || normalizeText(log?.player_name_1) || "unknown";
+  const normalizedRaw = normalizeText(log?.raw);
+  if (normalizedRaw) {
+    return `op-command|${playerRef}|${normalizedRaw}`;
+  }
+  const ts = Number(log?.timestamp_ms || 0);
+  const bucket = Number.isFinite(ts) && ts > 0 ? Math.floor(ts / 1000) : "no-ts";
+  return `op-command|${playerRef}|${normalizeText(log?.sub_content)}|${bucket}`;
+}
+
+function hasClanPrefixTag(playerName) {
+  return Boolean(getClanPrefixTag(playerName));
+}
+
+function getClanPrefixTag(playerName) {
+  const normalizedName = String(playerName || "");
+  const clanPrefixes = ["≫ ", "»BAIN« "];
+  return clanPrefixes.find((prefix) => normalizedName.startsWith(prefix)) || null;
+}
+
+function normalizeId(value) {
+  return String(value || "").trim();
+}
+
+function summarizeTeamViewForOp(teamViewResponse) {
+  const result = teamViewResponse?.result || {};
+  const teams = ["axis", "allies"];
+  const players = [];
+
+  for (const team of teams) {
+    const squads = result?.[team]?.squads || {};
+    for (const [squadName, squad] of Object.entries(squads)) {
+      const squadPlayers = Array.isArray(squad?.players) ? squad.players : [];
+      for (const player of squadPlayers) {
+        players.push({
+          playerId: normalizeId(player?.player_id),
+          playerName: String(player?.name || "").trim(),
+          role: normalizeText(player?.role),
+          unitId: Number(player?.unit_id || 0) || 0,
+          unitName: normalizeText(player?.unit_name || squadName),
+          team,
+          squadName: String(squadName || "").trim(),
+        });
+      }
+    }
+  }
+
+  return players;
+}
+
+function findSquadOfficerForRequester(players, requester) {
+  const requesterId = normalizeId(requester?.playerId);
+  const requesterName = normalizeText(requester?.playerName);
+  if (!requesterId && !requesterName) return { requesterRow: null, officerRow: null };
+
+  const requesterRow =
+    players.find((p) => requesterId && p.playerId === requesterId) ||
+    players.find((p) => requesterName && normalizeText(p.playerName) === requesterName) ||
+    null;
+
+  if (!requesterRow) return { requesterRow: null, officerRow: null };
+
+  const sameSquadPlayers = players.filter((p) => {
+    if (p.team !== requesterRow.team) return false;
+    if (p.unitId > 0 && requesterRow.unitId > 0) {
+      return p.unitId === requesterRow.unitId;
+    }
+    return p.unitName && requesterRow.unitName && p.unitName === requesterRow.unitName;
+  });
+
+  const officerRow = sameSquadPlayers.find((p) => p.role === "officer") || null;
+  return { requesterRow, officerRow };
 }
 
 function summarizeScoreboardResponse(resp) {
@@ -448,6 +532,125 @@ async function broadcastTop(client, cfg, reason, targetPlayer, options = {}) {
   logInfo("[top] broadcast sent (1 message)");
 }
 
+async function inspectOutpostRequest(client, cfg, log) {
+  if (shouldSkipTopCommandByCooldown(log, cfg)) {
+    logInfo("[event] !op skipped by cooldown", {
+      playerId: log.player_id_1 || null,
+      playerName: log.player_name_1 || null,
+      content: log.sub_content || null,
+      cooldownMs: cfg.topCommandCooldownMs,
+    });
+    return;
+  }
+
+  const requester = {
+    playerId: normalizeId(log?.player_id_1),
+    playerName: String(log?.player_name_1 || "").trim(),
+  };
+  const requesterPrefix = getClanPrefixTag(requester.playerName);
+
+  if (!requesterPrefix) {
+    logInfo("[op] !op ignored: requester without clan tag", {
+      requester,
+      requiredPrefixes: ["≫ ", "»BAIN« "],
+    });
+    return;
+  }
+
+  let teamViewResponse;
+  try {
+    teamViewResponse = await client.get("get_team_view");
+  } catch (err) {
+    logInfo("[op] failed to load team_view", {
+      requester,
+      error: err.message,
+    });
+    return;
+  }
+
+  const players = summarizeTeamViewForOp(teamViewResponse);
+  const { requesterRow, officerRow } = findSquadOfficerForRequester(players, requester);
+
+  if (!requesterRow) {
+    logInfo("[op] requester not found in team_view squads", { requester });
+    return;
+  }
+
+  if (!officerRow) {
+    logInfo("[op] no officer found for requester squad", {
+      requester,
+      squadName: requesterRow.squadName,
+      unitId: requesterRow.unitId || null,
+      team: requesterRow.team,
+    });
+    return;
+  }
+
+  const officerPrefix = getClanPrefixTag(officerRow.playerName);
+  if (!officerPrefix) {
+    logInfo("[op] !op ignored: squad officer without clan tag", {
+      requester,
+      officer: {
+        playerId: officerRow.playerId,
+        playerName: officerRow.playerName,
+      },
+      requiredPrefixes: ["≫ ", "»BAIN« "],
+    });
+    return;
+  }
+
+  const opReminderMessage = "MENSAGEM DO PELOTÃO\n\nCADE O OP PORRA?!";
+
+  if (cfg.dryRun) {
+    logInfo("[op] clan flow validated (dry-run)", {
+      requester: {
+        playerId: requesterRow.playerId,
+        playerName: requesterRow.playerName,
+        squadName: requesterRow.squadName,
+        team: requesterRow.team,
+      },
+      officer: {
+        playerId: officerRow.playerId,
+        playerName: officerRow.playerName,
+        squadName: officerRow.squadName,
+        team: officerRow.team,
+      },
+      outpostStatus: "indisponivel via endpoint/log atual",
+      action: "dry-run ativo; nao envia message_player",
+      clanPrefix: requesterPrefix,
+      message: opReminderMessage,
+    });
+    return;
+  }
+
+  await client.post("message_player", {
+    player_id: officerRow.playerId,
+    player_name: officerRow.playerName,
+    message: opReminderMessage,
+    by: "hll-top-bot",
+    save_message: false,
+  });
+
+  logInfo("[op] clan flow validated and reminder sent", {
+    requester: {
+      playerId: requesterRow.playerId,
+      playerName: requesterRow.playerName,
+      squadName: requesterRow.squadName,
+      team: requesterRow.team,
+    },
+    officer: {
+      playerId: officerRow.playerId,
+      playerName: officerRow.playerName,
+      squadName: officerRow.squadName,
+      team: officerRow.team,
+    },
+    outpostStatus: "indisponivel via endpoint/log atual",
+    action: "message_player enviado para oficial",
+    clanPrefix: requesterPrefix,
+    message: opReminderMessage,
+  });
+}
+
 async function pollLogs(client, cfg) {
   logInfo("[poll] reading recent logs");
   const logsResp = await client.post("get_recent_logs", {
@@ -473,6 +676,9 @@ async function pollLogs(client, cfg) {
         remember(seenChatEvents, key);
         if (isTopCommand(log)) {
           remember(seenTopCommands, topCommandKey(log));
+        }
+        if (isOpCommand(log)) {
+          remember(seenOpCommands, opCommandKey(log));
         }
       }
       if (String(log.action || "") === "MATCH ENDED") {
@@ -512,6 +718,21 @@ async function pollLogs(client, cfg) {
         playerId: log.player_id_1 || "",
         playerName: log.player_name_1 || "",
       }, { logFormattedPreview: true });
+      continue;
+    }
+
+    if (isOpCommand(log)) {
+      const commandKey = opCommandKey(log);
+      if (seenOpCommands.has(commandKey)) continue;
+      remember(seenOpCommands, commandKey);
+      remember(seenChatEvents, key);
+
+      logInfo("[event] !op detected", {
+        byPlayer: log.player_name_1 || null,
+        playerId: log.player_id_1 || null,
+        content: log.sub_content || null,
+      });
+      await inspectOutpostRequest(client, cfg, log);
       continue;
     }
 

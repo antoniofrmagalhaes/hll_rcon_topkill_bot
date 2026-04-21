@@ -2,8 +2,8 @@
   <h1>HLL RCON Top Bot</h1>
   <p>
     Bot Node.js para <strong>CRCON / Hell Let Loose</strong> focado em
-    responder <code>!top</code> no chat e publicar automaticamente o ranking
-    de abates ao final da partida.
+    responder <code>!top</code> e <code>!op</code> no chat e publicar
+    automaticamente o ranking de abates ao final da partida.
   </p>
   <p>
     <a href="https://github.com/antoniofrmagalhaes/hll_rcon_topkill_bot">
@@ -36,8 +36,8 @@
 ## Visão Geral
 
 Esta branch `main` representa somente o produto operacional: o bot que observa
-os logs do CRCON, identifica o comando `!top`, responde em mensagem privada e
-anuncia o ranking quando a partida termina.
+os logs do CRCON, identifica os comandos `!top` e `!op`, responde em mensagem
+privada e anuncia o ranking quando a partida termina.
 
 O objetivo aqui é manter a branch principal limpa, direta e pronta para deploy,
 sem misturar código exploratório, artefatos de discovery ou experimentos de API.
@@ -65,8 +65,10 @@ sem misturar código exploratório, artefatos de discovery ou experimentos de AP
 
 - monitora logs recentes do CRCON;
 - detecta o comando `!top` enviado no chat;
+- detecta o comando `!op` enviado no chat;
 - calcula o ranking dos jogadores com mais abates;
 - responde o resultado por mensagem privada para quem executou o comando;
+- envia lembrete de OP para o oficial do squad quando `!op` passa nas regras de tag;
 - detecta `MATCH ENDED` e publica o top automaticamente;
 - evita spam e duplicidade com cooldown, lock de processo e estado persistido.
 
@@ -84,6 +86,7 @@ CRCON API
 src/bot.js
   ├─ polling de logs
   ├─ detecção de !top
+  ├─ detecção de !op
   ├─ detecção de MATCH ENDED
   ├─ cooldown / deduplicação
   ├─ persistência de estado
@@ -213,6 +216,27 @@ Quando encontra `MATCH ENDED`, o processo:
 
 O fluxo principal usa `get_live_game_stats`. Quando esse retorno não vier com dados
 de `stats`, o bot tenta fallback usando `get_live_scoreboard`.
+
+### 5. Comando `!op`
+
+Quando encontra uma mensagem de chat com `!op`, o processo:
+
+- identifica o jogador emissor;
+- aplica deduplicação por evento;
+- aplica cooldown por ator;
+- valida se o emissor começa com `≫ ` ou `»BAIN« `;
+- consulta `get_team_view` para localizar o squad do emissor;
+- identifica o oficial do mesmo squad;
+- valida se o oficial começa com `≫ ` ou `»BAIN« `;
+- envia PM para o oficial com:
+  - `MENSAGEM DO PELOTÃO`
+  - linha em branco
+  - `CADE O OP PORRA?!`
+
+Observações:
+
+- o comando `!op` não verifica estado real do outpost (não há endpoint/log confiável para isso no fluxo atual);
+- em `BOT_DRY_RUN=true`, o bot não envia PM real e apenas registra logs.
 
 ## Variáveis de Ambiente
 
@@ -425,6 +449,14 @@ Revise o `.env` e confirme se `RCON_API_TOKEN` e `RCON_BASE_URL` estão preenchi
 - valide se o evento está chegando em `get_recent_logs`;
 - confirme se a mensagem realmente chega como `!top`;
 - revise o cooldown configurado.
+
+### O bot não responde ao `!op`
+
+- valide se o evento está chegando em `get_recent_logs`;
+- confirme se a mensagem realmente chega como `!op`;
+- confirme se emissor e oficial começam com `≫ ` ou `»BAIN« `;
+- revise o cooldown configurado;
+- use `BOT_DRY_RUN=true` para validar o fluxo só com logs.
 
 ### O anúncio de `MATCH ENDED` não saiu
 
