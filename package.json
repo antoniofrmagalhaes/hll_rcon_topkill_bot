@@ -5,7 +5,8 @@
   "main": "src/bot.js",
   "scripts": {
     "bot": "node src/bot.js",
-    "clear": "node src/clear.js"
+    "clear": "node src/clear.js",
+    "restart": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; git pull --ff-only && sudo systemctl restart \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager"
   },
   "keywords": [],
   "author": "",

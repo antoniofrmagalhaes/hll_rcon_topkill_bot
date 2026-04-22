@@ -442,10 +442,14 @@ PM2_STARTUP_USER=www-data \
 No diretório do projeto:
 
 ```bash
-git pull --ff-only && sudo systemctl restart hll-top-bot && sudo systemctl status hll-top-bot --no-pager
+pnpm run restart
 ```
 
-Se você usa outro nome de serviço, substitua `hll-top-bot`.
+Por padrão, o script usa `hll-top-bot`. Para outro serviço:
+
+```bash
+SERVICE_NAME=meu-servico pnpm run restart
+```
 
 ### Artefatos de runtime
 
