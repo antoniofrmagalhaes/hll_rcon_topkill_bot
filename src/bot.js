@@ -14,12 +14,15 @@ const topCommandCooldownByActor = new Map();
 const seenMatchEndEvents = new Set();
 let logsWarmedUp = false;
 const stateFilePath = process.env.BOT_STATE_FILE || path.resolve(__dirname, "..", "artifacts", "bot-state.json");
+let botsConfigFilePath = null;
 let lockFilePath = null;
 let lockFd = null;
 let state = {
   lastMatchEndKey: null,
   lastMatchEndedAtMs: 0,
 };
+let cachedBotSwitches = null;
+let cachedBotSwitchesMtimeMs = null;
 
 function nowIso() {
   return new Date().toISOString();
@@ -48,6 +51,78 @@ function remember(set, key, max = 1000) {
 
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function defaultBotSwitches() {
+  return {
+    top: true,
+    op: true,
+  };
+}
+
+function normalizeBotSwitches(raw) {
+  const defaults = defaultBotSwitches();
+  const bots = raw && typeof raw === "object" && raw.bots && typeof raw.bots === "object" ? raw.bots : {};
+
+  return {
+    top: typeof bots.top === "boolean" ? bots.top : defaults.top,
+    op: typeof bots.op === "boolean" ? bots.op : defaults.op,
+  };
+}
+
+function readBotSwitches(cfg) {
+  if (!botsConfigFilePath) {
+    botsConfigFilePath = path.isAbsolute(cfg.botsConfigFile)
+      ? cfg.botsConfigFile
+      : path.resolve(__dirname, "..", cfg.botsConfigFile);
+  }
+
+  try {
+    if (!fs.existsSync(botsConfigFilePath)) {
+      if (!cachedBotSwitches) {
+        cachedBotSwitches = defaultBotSwitches();
+        logInfo("[config] bots config file not found; using defaults", {
+          file: botsConfigFilePath,
+          bots: cachedBotSwitches,
+        });
+      }
+      return cachedBotSwitches;
+    }
+
+    const stat = fs.statSync(botsConfigFilePath);
+    if (cachedBotSwitches && cachedBotSwitchesMtimeMs === stat.mtimeMs) {
+      return cachedBotSwitches;
+    }
+
+    const parsed = JSON.parse(fs.readFileSync(botsConfigFilePath, "utf8"));
+    const normalized = normalizeBotSwitches(parsed);
+    const changed =
+      !cachedBotSwitches ||
+      cachedBotSwitches.top !== normalized.top ||
+      cachedBotSwitches.op !== normalized.op;
+
+    cachedBotSwitches = normalized;
+    cachedBotSwitchesMtimeMs = stat.mtimeMs;
+
+    if (changed) {
+      logInfo("[config] bots switches updated", {
+        file: botsConfigFilePath,
+        bots: cachedBotSwitches,
+      });
+    }
+
+    return cachedBotSwitches;
+  } catch (err) {
+    if (!cachedBotSwitches) {
+      cachedBotSwitches = defaultBotSwitches();
+    }
+    logInfo("[config] failed to read bots config file; keeping last known switches", {
+      file: botsConfigFilePath,
+      error: err.message,
+      bots: cachedBotSwitches,
+    });
+    return cachedBotSwitches;
+  }
 }
 
 function eventKey(log) {
@@ -652,6 +727,7 @@ async function inspectOutpostRequest(client, cfg, log) {
 }
 
 async function pollLogs(client, cfg) {
+  const botSwitches = readBotSwitches(cfg);
   logInfo("[poll] reading recent logs");
   const logsResp = await client.post("get_recent_logs", {
     start: 0,
@@ -696,6 +772,15 @@ async function pollLogs(client, cfg) {
     if (isTopCommand(log)) {
       const commandKey = topCommandKey(log);
       if (seenTopCommands.has(commandKey)) continue;
+      if (!botSwitches.top) {
+        remember(seenTopCommands, commandKey);
+        remember(seenChatEvents, key);
+        logInfo("[event] !top ignored: top bot disabled in config", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+        });
+        continue;
+      }
       if (shouldSkipTopCommandByCooldown(log, cfg)) {
         logInfo("[event] !top skipped by cooldown", {
           playerId: log.player_id_1 || null,
@@ -724,6 +809,15 @@ async function pollLogs(client, cfg) {
     if (isOpCommand(log)) {
       const commandKey = opCommandKey(log);
       if (seenOpCommands.has(commandKey)) continue;
+      if (!botSwitches.op) {
+        remember(seenOpCommands, commandKey);
+        remember(seenChatEvents, key);
+        logInfo("[event] !op ignored: op bot disabled in config", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+        });
+        continue;
+      }
       remember(seenOpCommands, commandKey);
       remember(seenChatEvents, key);
 
@@ -746,6 +840,14 @@ async function pollLogs(client, cfg) {
   }
 
   if (!latestMatchEndedLog) return;
+  if (!botSwitches.top) {
+    const skippedMatchEndKey = matchEndKey(latestMatchEndedLog);
+    remember(seenMatchEndEvents, skippedMatchEndKey);
+    logInfo("[event] MATCH ENDED ignored: top bot disabled in config", {
+      matchEndKey: skippedMatchEndKey,
+    });
+    return;
+  }
 
   loadState();
   const currentMatchEndKey = matchEndKey(latestMatchEndedLog);
@@ -790,6 +892,9 @@ async function main() {
     pollIntervalMs: cfg.pollIntervalMs,
     logWindow: cfg.logWindow,
     lockFilePath,
+    botsConfigFilePath: path.isAbsolute(cfg.botsConfigFile)
+      ? cfg.botsConfigFile
+      : path.resolve(__dirname, "..", cfg.botsConfigFile),
     topLimit: cfg.topLimit,
     topStatsEndpoint: cfg.topStatsEndpoint,
     dryRun: cfg.dryRun,

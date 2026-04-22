@@ -13,6 +13,7 @@ function readEnv() {
     pollIntervalMs: Number(process.env.BOT_POLL_INTERVAL_MS || 5000),
     logWindow: Number(process.env.BOT_LOG_WINDOW || 120),
     lockFile: process.env.BOT_LOCK_FILE || "artifacts/bot.lock",
+    botsConfigFile: process.env.BOTS_CONFIG_FILE || "bots.config.json",
     topCommandCooldownMs: Number(process.env.BOT_TOP_COMMAND_COOLDOWN_MS || 15000),
     matchEndedCooldownMs: Number(process.env.BOT_MATCH_ENDED_COOLDOWN_MS || 300000),
     topLimit: Number(process.env.TOP_LIMIT || 10),

@@ -110,6 +110,7 @@ src/bot.js
 ```text
 .
 ├── .env.example
+├── bots.config.json
 ├── .gitignore
 ├── README.md
 ├── package.json
@@ -158,6 +159,21 @@ RCON_BASE_URL=https://seu-crcon.exemplo.com.br
 ```
 
 3. Ajuste os parâmetros operacionais conforme o comportamento esperado do servidor.
+
+4. Configure quais bots ficam ativos em `bots.config.json`:
+
+```json
+{
+  "bots": {
+    "top": true,
+    "op": true
+  }
+}
+```
+
+- `top=false`: desativa respostas do `!top` e anúncio automático de `MATCH ENDED`;
+- `op=false`: desativa respostas do `!op`;
+- a leitura é dinâmica no runtime (altere o JSON sem reiniciar o processo).
 
 ## Como Executar
 
@@ -247,6 +263,7 @@ Observações:
 | `BOT_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs. |
 | `BOT_LOG_WINDOW` | Não | `120` | Janela de logs recentes por ciclo. |
 | `BOT_LOCK_FILE` | Não | `artifacts/bot.lock` | Arquivo usado para lock de processo. |
+| `BOTS_CONFIG_FILE` | Não | `bots.config.json` | Arquivo JSON na raiz com liga/desliga por bot. |
 | `BOT_TOP_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!top`. |
 | `BOT_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown para `MATCH ENDED`. |
 | `TOP_LIMIT` | Não | `10` | Quantidade de jogadores exibidos. |
@@ -419,6 +436,16 @@ PM2_STARTUP_USER=www-data \
 ```
 
 ## Operação e Manutenção
+
+### Atualizar e reiniciar (`systemd`)
+
+No diretório do projeto:
+
+```bash
+git pull --ff-only && sudo systemctl restart hll-top-bot && sudo systemctl status hll-top-bot --no-pager
+```
+
+Se você usa outro nome de serviço, substitua `hll-top-bot`.
 
 ### Artefatos de runtime
 
