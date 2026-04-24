@@ -164,15 +164,23 @@ function shouldSkipTopCommandByCooldown(log, cfg) {
 }
 
 function matchEndKey(log) {
+  const ts = Number(log?.timestamp_ms || 0);
+  if (Number.isFinite(ts) && ts > 0) {
+    const summary = normalizeText(log?.sub_content || log?.message || log?.raw);
+    return `match-ended|${ts}|${summary || "no-summary"}`;
+  }
   const summary = normalizeText(log?.sub_content || log?.message || log?.raw);
   if (summary) {
     return `match-ended|${summary}`;
   }
-  const ts = Number(log?.timestamp_ms || 0);
-  if (Number.isFinite(ts) && ts > 0) {
-    return `match-ended|${Math.floor(ts / 1000)}`;
-  }
   return "match-ended|unknown";
+}
+
+function isMatchEndedLog(log) {
+  const action = String(log?.action || "")
+    .trim()
+    .toUpperCase();
+  return action === "MATCH ENDED" || action.includes("MATCH ENDED");
 }
 
 function readLockFile() {
@@ -757,7 +765,7 @@ async function pollLogs(client, cfg) {
           remember(seenOpCommands, opCommandKey(log));
         }
       }
-      if (String(log.action || "") === "MATCH ENDED") {
+      if (isMatchEndedLog(log)) {
         remember(seenMatchEndEvents, matchEndKey(log));
       }
     }
@@ -830,7 +838,7 @@ async function pollLogs(client, cfg) {
       continue;
     }
 
-    if (String(log.action || "") === "MATCH ENDED") {
+    if (isMatchEndedLog(log)) {
       const currentTs = Number(log.timestamp_ms || 0);
       const currentLatestTs = Number(latestMatchEndedLog?.timestamp_ms || 0);
       if (!latestMatchEndedLog || currentTs >= currentLatestTs) {
