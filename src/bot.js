@@ -10,6 +10,7 @@ const { normalizePlayers, computeTopKillers, formatTopMessage } = require("./top
 const seenChatEvents = new Set();
 const seenTopCommands = new Set();
 const seenOpCommands = new Set();
+const seenNodosCommands = new Set();
 const topCommandCooldownByActor = new Map();
 const seenMatchEndEvents = new Set();
 let logsWarmedUp = false;
@@ -23,6 +24,7 @@ let state = {
 };
 let cachedBotSwitches = null;
 let cachedBotSwitchesMtimeMs = null;
+const ALLOWED_NODOS_TESTERS = ["≫ GAEL"];
 
 function nowIso() {
   return new Date().toISOString();
@@ -57,6 +59,7 @@ function defaultBotSwitches() {
   return {
     top: true,
     op: true,
+    nodos: true,
   };
 }
 
@@ -67,6 +70,7 @@ function normalizeBotSwitches(raw) {
   return {
     top: typeof bots.top === "boolean" ? bots.top : defaults.top,
     op: typeof bots.op === "boolean" ? bots.op : defaults.op,
+    nodos: typeof bots.nodos === "boolean" ? bots.nodos : defaults.nodos,
   };
 }
 
@@ -99,7 +103,8 @@ function readBotSwitches(cfg) {
     const changed =
       !cachedBotSwitches ||
       cachedBotSwitches.top !== normalized.top ||
-      cachedBotSwitches.op !== normalized.op;
+      cachedBotSwitches.op !== normalized.op ||
+      cachedBotSwitches.nodos !== normalized.nodos;
 
     cachedBotSwitches = normalized;
     cachedBotSwitchesMtimeMs = stat.mtimeMs;
@@ -308,6 +313,14 @@ function isOpCommand(log) {
   return content === "!op" || content.startsWith("!op ");
 }
 
+function isNodosCommand(log) {
+  if (!log || typeof log !== "object") return false;
+  if (!String(log.action || "").startsWith("CHAT")) return false;
+
+  const content = String(log.sub_content || "").trim().toLowerCase();
+  return content === "!nodos" || content.startsWith("!nodos ");
+}
+
 function opCommandKey(log) {
   const playerRef = String(log?.player_id_1 || "").trim() || normalizeText(log?.player_name_1) || "unknown";
   const normalizedRaw = normalizeText(log?.raw);
@@ -317,6 +330,17 @@ function opCommandKey(log) {
   const ts = Number(log?.timestamp_ms || 0);
   const bucket = Number.isFinite(ts) && ts > 0 ? Math.floor(ts / 1000) : "no-ts";
   return `op-command|${playerRef}|${normalizeText(log?.sub_content)}|${bucket}`;
+}
+
+function nodosCommandKey(log) {
+  const playerRef = String(log?.player_id_1 || "").trim() || normalizeText(log?.player_name_1) || "unknown";
+  const normalizedRaw = normalizeText(log?.raw);
+  if (normalizedRaw) {
+    return `nodos-command|${playerRef}|${normalizedRaw}`;
+  }
+  const ts = Number(log?.timestamp_ms || 0);
+  const bucket = Number.isFinite(ts) && ts > 0 ? Math.floor(ts / 1000) : "no-ts";
+  return `nodos-command|${playerRef}|${normalizeText(log?.sub_content)}|${bucket}`;
 }
 
 function hasClanPrefixTag(playerName) {
@@ -339,6 +363,19 @@ function summarizeTeamViewForOp(teamViewResponse) {
   const players = [];
 
   for (const team of teams) {
+    const commander = result?.[team]?.commander;
+    if (commander && typeof commander === "object") {
+      players.push({
+        playerId: normalizeId(commander?.player_id),
+        playerName: String(commander?.name || "").trim(),
+        role: normalizeText(commander?.role || "commander"),
+        unitId: 0,
+        unitName: "commander",
+        team,
+        squadName: "commander",
+      });
+    }
+
     const squads = result?.[team]?.squads || {};
     for (const [squadName, squad] of Object.entries(squads)) {
       const squadPlayers = Array.isArray(squad?.players) ? squad.players : [];
@@ -381,6 +418,67 @@ function findSquadOfficerForRequester(players, requester) {
 
   const officerRow = sameSquadPlayers.find((p) => p.role === "officer") || null;
   return { requesterRow, officerRow };
+}
+
+function findRequesterInTeam(players, requester) {
+  const requesterId = normalizeId(requester?.playerId);
+  const requesterName = normalizeText(requester?.playerName);
+  if (!requesterId && !requesterName) return null;
+
+  return (
+    players.find((p) => requesterId && p.playerId === requesterId) ||
+    players.find((p) => requesterName && normalizeText(p.playerName) === requesterName) ||
+    null
+  );
+}
+
+function uniqueByPlayerIdOrName(players) {
+  const seen = new Set();
+  const unique = [];
+  for (const player of players) {
+    const key = `${normalizeId(player?.playerId) || "no-id"}|${normalizeText(player?.playerName) || "no-name"}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(player);
+  }
+  return unique;
+}
+
+function isCommanderRole(role) {
+  const normalizedRole = normalizeText(role).replace(/[_\s-]+/g, "");
+  return normalizedRole === "commander" || normalizedRole === "armycommander";
+}
+
+function summarizeRoles(players) {
+  const roleCounts = {};
+  for (const player of players) {
+    const role = normalizeText(player?.role) || "unknown";
+    roleCounts[role] = Number(roleCounts[role] || 0) + 1;
+  }
+  return Object.entries(roleCounts)
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      return a[0].localeCompare(b[0]);
+    })
+    .map(([role, count]) => ({ role, count }));
+}
+
+function formatNodosOfficerMessage() {
+  return [
+    "COMANDO - NODOS",
+    "",
+    "Oficiais: avisem seus engenheiros para construir nodos agora.",
+    "Prioridade: atras da 2a linha, no quadrante do ultimo ponto.",
+  ].join("\n");
+}
+
+function formatNodosEngineerMessage() {
+  return [
+    "COMANDO - NODOS",
+    "",
+    "Seu time precisa de nodos para vencer.",
+    "Construa atras da 2a linha, no quadrante do ultimo ponto.",
+  ].join("\n");
 }
 
 function summarizeScoreboardResponse(resp) {
@@ -630,6 +728,7 @@ async function inspectOutpostRequest(client, cfg, log) {
     playerId: normalizeId(log?.player_id_1),
     playerName: String(log?.player_name_1 || "").trim(),
   };
+  const requesterIsTester = ALLOWED_NODOS_TESTERS.includes(requester.playerName);
   const requesterPrefix = getClanPrefixTag(requester.playerName);
 
   if (!requesterPrefix) {
@@ -734,6 +833,132 @@ async function inspectOutpostRequest(client, cfg, log) {
   });
 }
 
+async function inspectNodosRequest(client, cfg, log) {
+  if (shouldSkipTopCommandByCooldown(log, cfg)) {
+    logInfo("[event] !nodos skipped by cooldown", {
+      playerId: log.player_id_1 || null,
+      playerName: log.player_name_1 || null,
+      content: log.sub_content || null,
+      cooldownMs: cfg.topCommandCooldownMs,
+    });
+    return;
+  }
+
+  const requester = {
+    playerId: normalizeId(log?.player_id_1),
+    playerName: String(log?.player_name_1 || "").trim(),
+  };
+
+  let teamViewResponse;
+  try {
+    teamViewResponse = await client.get("get_team_view");
+  } catch (err) {
+    logInfo("[nodos] failed to load team_view", {
+      requester,
+      error: err.message,
+    });
+    return;
+  }
+
+  const players = summarizeTeamViewForOp(teamViewResponse);
+  const requesterRow = findRequesterInTeam(players, requester);
+  if (!requesterRow) {
+    logInfo("[nodos] requester not found in team_view", { requester });
+    return;
+  }
+
+  const requesterIsCommander = isCommanderRole(requesterRow.role);
+  if (!requesterIsTester && !requesterIsCommander) {
+    logInfo("[nodos] !nodos ignored: requester is not commander", {
+      requester,
+      role: requesterRow.role,
+      team: requesterRow.team,
+      allowedTesters: ALLOWED_NODOS_TESTERS,
+    });
+    return;
+  }
+
+  const sameTeamPlayers = players.filter((player) => player.team === requesterRow.team);
+  const officers = uniqueByPlayerIdOrName(sameTeamPlayers.filter((player) => player.role === "officer"));
+  const engineers = uniqueByPlayerIdOrName(sameTeamPlayers.filter((player) => player.role === "engineer"));
+  const officerMessage = formatNodosOfficerMessage();
+  const engineerMessage = formatNodosEngineerMessage();
+  const officersCount = officers.length;
+  const engineersCount = engineers.length;
+  const classesSummary = summarizeRoles(sameTeamPlayers);
+
+  logInfo("[nodos] !nodos validated", {
+    requester: {
+      playerId: requester.playerId,
+      playerName: requester.playerName,
+      team: requesterRow.team,
+      role: requesterRow.role,
+    },
+    access: {
+      requesterIsTester,
+      requesterIsCommander,
+    },
+    recipients: {
+      officers: officersCount,
+      engineers: engineersCount,
+    },
+  });
+
+  logInfo("[nodos] recipients summary", {
+    team: requesterRow.team,
+    officersCount,
+    engineersCount,
+  });
+  logInfo("[nodos] classes summary (requester team)", {
+    team: requesterRow.team,
+    classes: classesSummary,
+  });
+  logInfo("[nodos] officers list (requester team)", {
+    team: requesterRow.team,
+    officers: officers.map((officer) => ({
+      playerId: officer.playerId || null,
+      playerName: officer.playerName || null,
+      role: officer.role || null,
+      squadName: officer.squadName || null,
+    })),
+  });
+  logInfo("[nodos] engineers list (requester team)", {
+    team: requesterRow.team,
+    engineers: engineers.map((engineer) => ({
+      playerId: engineer.playerId || null,
+      playerName: engineer.playerName || null,
+      role: engineer.role || null,
+      squadName: engineer.squadName || null,
+    })),
+  });
+  console.log(`[${nowIso()}] [nodos] officer message preview\n${officerMessage}`);
+  console.log(`[${nowIso()}] [nodos] engineer message preview\n${engineerMessage}`);
+
+  for (const officer of officers) {
+    logInfo("[nodos] would send officer reminder", {
+      targetPlayerId: officer.playerId || null,
+      targetPlayerName: officer.playerName || null,
+      team: officer.team,
+      message: officerMessage,
+    });
+  }
+
+  for (const engineer of engineers) {
+    logInfo("[nodos] would send engineer reminder", {
+      targetPlayerId: engineer.playerId || null,
+      targetPlayerName: engineer.playerName || null,
+      team: engineer.team,
+      message: engineerMessage,
+    });
+  }
+
+  logInfo("[nodos] reminders preview completed (console-only)", {
+    team: requesterRow.team,
+    officersCount,
+    engineersCount,
+  });
+}
+
 async function pollLogs(client, cfg) {
   const botSwitches = readBotSwitches(cfg);
   logInfo("[poll] reading recent logs");
@@ -763,6 +988,9 @@ async function pollLogs(client, cfg) {
         }
         if (isOpCommand(log)) {
           remember(seenOpCommands, opCommandKey(log));
+        }
+        if (isNodosCommand(log)) {
+          remember(seenNodosCommands, nodosCommandKey(log));
         }
       }
       if (isMatchEndedLog(log)) {
@@ -835,6 +1063,30 @@ async function pollLogs(client, cfg) {
         content: log.sub_content || null,
       });
       await inspectOutpostRequest(client, cfg, log);
+      continue;
+    }
+
+    if (isNodosCommand(log)) {
+      const commandKey = nodosCommandKey(log);
+      if (seenNodosCommands.has(commandKey)) continue;
+      if (!botSwitches.nodos) {
+        remember(seenNodosCommands, commandKey);
+        remember(seenChatEvents, key);
+        logInfo("[event] !nodos ignored: nodos bot disabled in config", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+        });
+        continue;
+      }
+      remember(seenNodosCommands, commandKey);
+      remember(seenChatEvents, key);
+
+      logInfo("[event] !nodos detected", {
+        byPlayer: log.player_name_1 || null,
+        playerId: log.player_id_1 || null,
+        content: log.sub_content || null,
+      });
+      await inspectNodosRequest(client, cfg, log);
       continue;
     }
 

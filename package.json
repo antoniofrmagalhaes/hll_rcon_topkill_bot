@@ -6,7 +6,9 @@
   "scripts": {
     "bot": "node src/bot.js",
     "clear": "node src/clear.js",
-    "restart": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; git pull --ff-only && sudo systemctl restart \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
+    "start": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; sudo systemctl start \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
+    "restart": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; sudo systemctl restart \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
+    "refresh": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; git pull --ff-only && sudo systemctl restart \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
     "stop": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; sudo systemctl stop \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager || true"
   },
   "keywords": [],

@@ -1,6 +1,7 @@
 {
   "bots": {
     "top": true,
-    "op": false
+    "op": false,
+    "nodos": true
   }
 }
