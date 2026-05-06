@@ -220,9 +220,9 @@ Desempates:
   </tbody>
 </table>
 
-### Top 3 jogadores de combate
+### Top 3 jogadores da partida
 
-O objetivo e premiar performance real, nao apenas abates brutos. A formula deve considerar kills, KPM quando disponivel e pontos somados de combate, ofensivo, defensivo e suporte.
+O objetivo e premiar performance real da partida, nao apenas abates brutos. A formula deve considerar kills, KPM quando disponivel e pontos somados de combate, ofensivo, defensivo e suporte.
 
 <table>
   <thead>
@@ -235,8 +235,8 @@ O objetivo e premiar performance real, nao apenas abates brutos. A formula deve 
   <tbody>
     <tr>
       <td><code>kills</code></td>
-      <td>10 pontos por kill</td>
-      <td>Evita que score passivo supere um jogador decisivo em combate.</td>
+      <td>20 pontos por kill</td>
+      <td>Valoriza mais o jogador que realmente impactou a partida com abates.</td>
     </tr>
     <tr>
       <td><code>combat</code></td>
@@ -260,7 +260,7 @@ O objetivo e premiar performance real, nao apenas abates brutos. A formula deve 
     </tr>
     <tr>
       <td><code>kpm</code></td>
-      <td>bonus de ate 100</td>
+      <td>bonus de ate 200</td>
       <td>Usar apenas se o endpoint trouxer tempo jogado confiavel.</td>
     </tr>
   </tbody>
@@ -269,8 +269,8 @@ O objetivo e premiar performance real, nao apenas abates brutos. A formula deve 
 Formula proposta:
 
 ```txt
-playerPerformanceScore = (kills * 10) + combat + offense + defense + (support * 1.2) + kpmBonus
-kpmBonus = min(kpm * 50, 100)
+playerPerformanceScore = (kills * 20) + combat + offense + defense + (support * 1.2) + kpmBonus
+kpmBonus = min(kpm * 100, 200)
 ```
 
 Desempates:
@@ -450,7 +450,7 @@ Melhor Comandante
 PlayerName 4250 pts - VIP 1 dia
 suporte 2300 / combate 1200 / obj 1500
 
-Top 3 Combate
+Top 3 Jogadores da Partida
 01 PlayerName 5320 pts - VIP 1 dia
 02 PlayerName 4980 pts - ja tem VIP
 03 PlayerName 4720 pts - VIP 1 dia
@@ -495,7 +495,7 @@ Top combate:
 ```txt
 Parabens, PlayerName!
 
-Voce ficou em 2 lugar no top performance da partida com 4980 pontos.
+Voce ficou em 2 lugar entre os jogadores da partida com 4980 pontos.
 Ganhou 1 dia de VIP, valido ate 06/05/2026 10:25.
 Continue buscando performance para renovar nas proximas partidas.
 ```
@@ -543,15 +543,22 @@ O jogador aparece apenas na mensagem publica como ja tem VIP.
 ### Mensagem proposta
 
 ```txt
-VIP por performance
+VIP Por Performance
 
-No fim da partida, o servidor premia com 1 dia de VIP:
-- melhor comandante
-- top 3 jogadores de combate
-- melhor squad de tanque
+Melhor comandante
+Top 3 jogadores da partida
+Melhor squad de tanque
 
-Top combate considera kills, KPM quando disponivel, combate, ataque, defesa e suporte.
-Quem ja tem VIP nao acumula dias.
+Comandante:
+suporte x1, combate x1, abates x10, ataque/defesa x0.5
+
+Jogadores:
+kills x20, KPM x100, combate x1, ataque x1, defesa x1, suporte x1.2
+
+Tanque:
+kills x10, combate x1, ataque x1, defesa x1, suporte x1
+
+Premiacao: 1 dia de VIP nao acumulativo.
 ```
 
 Resposta deve ser privada para o jogador que chamou o comando. Se nao houver `player_id` no log, fallback para chat geral apenas em dry-run/teste, ou ignorar com log.

@@ -2,7 +2,7 @@
   <h1>HLL RCON TopKill Bot</h1>
   <p>
     Bot Node.js para <strong>CRCON / Hell Let Loose</strong> com discovery de API,
-    ranking de abates sob demanda e anúncio automático ao final da partida.
+    ranking de abates, performance da partida e premiação VIP automática.
   </p>
   <p>
     <a href="https://github.com/antoniofrmagalhaes/hll_rcon_topkill_bot">
@@ -37,9 +37,10 @@
 Este projeto automatiza um fluxo simples e útil para servidores de Hell Let Loose conectados ao CRCON:
 
 - descobre e valida endpoints da API;
-- monitora logs recentes para capturar o comando `!top`;
+- monitora logs recentes para capturar os comandos `!top`, `!perf` e `!performance`;
 - envia o ranking de abates em mensagem privada para quem acionou o comando;
 - detecta `MATCH ENDED` e publica automaticamente o top da partida;
+- detecta `MATCH ENDED` no bot de performance, publica os vencedores e concede VIP de 1 dia;
 - evita duplicações com cooldown, memória de eventos e persistência de estado.
 
 <table>
@@ -83,6 +84,27 @@ Este projeto automatiza um fluxo simples e útil para servidores de Hell Let Loo
 
 </details>
 
+<details open>
+  <summary><strong>Performance e VIP no fim da partida</strong></summary>
+
+- calcula melhor comandante, top 3 jogadores da partida e melhor squad de tanque;
+- publica o resultado da performance no chat geral;
+- concede VIP de 1 dia com `add_vip` para vencedores sem VIP;
+- envia mensagem privada para cada vencedor premiado;
+- consulta VIPs atuais para evitar acúmulo;
+- persiste estado próprio para não processar o mesmo `MATCH ENDED` duas vezes.
+
+</details>
+
+<details open>
+  <summary><strong>Comando <code>!perf</code> / <code>!performance</code></strong></summary>
+
+- responde por mensagem privada;
+- explica categorias, critérios de pontuação e premiação;
+- ajuda jogadores a entender como buscar VIP por performance.
+
+</details>
+
 <details>
   <summary><strong>Proteções operacionais</strong></summary>
 
@@ -100,19 +122,27 @@ CRCON API
   ├─ get_recent_logs
   ├─ get_live_game_stats
   ├─ get_live_scoreboard
+  ├─ get_team_view
+  ├─ get_vip_ids
+  ├─ add_vip
   ├─ message_player
   └─ message_all_players
         │
         ▼
-src/bot.js
-  ├─ polling de logs
-  ├─ detecção de !top
-  ├─ detecção de MATCH ENDED
-  ├─ cooldown / deduplicação
-  └─ persistência de estado
+src/runBots.js
+  ├─ src/bot.js
+  │   ├─ detecção de !top
+  │   └─ anúncio de top kill em MATCH ENDED
+  ├─ src/performanceInfoBot.js
+  │   └─ detecção de !perf / !performance
+  └─ src/performanceBot.js
+      ├─ performance em MATCH ENDED
+      ├─ concessão de VIP
+      └─ mensagens públicas/privadas
         │
         ├─ src/rconClient.js
         ├─ src/top.js
+        ├─ src/performance.js
         └─ src/config.js
 ```
 
@@ -121,6 +151,7 @@ src/bot.js
 - O bot faz `1` request de logs por ciclo de polling.
 - Requests de scoreboard e envio de mensagens só acontecem quando há evento relevante.
 - O ranking ordena por `kills`, depois `kd`, depois menor número de mortes e por fim nome.
+- O bot de performance tem estado próprio para processar cada `MATCH ENDED` uma única vez.
 - O processo usa arquivo de lock para impedir múltiplas instâncias respondendo ao mesmo tempo.
 
 ## Estrutura do Projeto
@@ -138,7 +169,11 @@ src/bot.js
 │   ├── clear.js
 │   ├── config.js
 │   ├── discover.js
+│   ├── performance.js
+│   ├── performanceBot.js
+│   ├── performanceInfoBot.js
 │   ├── rconClient.js
+│   ├── runBots.js
 │   └── top.js
 └── artifacts
     ├── api-docs.json
@@ -150,7 +185,11 @@ src/bot.js
 
 - `src/bot.js`: loop principal, eventos, cooldown, estado e lock de processo.
 - `src/discover.js`: discovery dos endpoints disponíveis na API.
+- `src/performance.js`: cálculo e formatação dos vencedores de performance.
+- `src/performanceBot.js`: bot de produção para performance/VIP no fim da partida.
+- `src/performanceInfoBot.js`: bot informativo para `!perf` e `!performance`.
 - `src/rconClient.js`: cliente HTTP com autenticação Bearer e logging resumido.
+- `src/runBots.js`: runner local/produção para subir os bots juntos.
 - `src/top.js`: normalização, cálculo e formatação do ranking.
 - `src/config.js`: leitura e validação das variáveis de ambiente.
 - `src/clear.js`: encerramento/limpeza operacional do bot.
@@ -162,6 +201,9 @@ src/bot.js
 - token com permissões compatíveis com:
   - `get_recent_logs`
   - `get_live_game_stats`
+  - `get_team_view`
+  - `get_vip_ids`
+  - `add_vip`
   - `message_all_players`
   - `message_player`
 
@@ -204,6 +246,14 @@ Esse comando ajuda a inspecionar os endpoints retornados pelo CRCON e registrar 
 npm run bot
 ```
 
+### Iniciar todos os bots
+
+```bash
+npm run bots
+```
+
+Esse comando sobe o bot de `!top`, o bot informativo de performance e, quando `PERFORMANCE_BOT_ENABLED=true`, o bot de performance/VIP.
+
 ### Encerrar o processo do bot
 
 ```bash
@@ -213,10 +263,11 @@ npm run clear
 ### Smoke test manual
 
 1. Preencha `RCON_BASE_URL` e `RCON_API_TOKEN`.
-2. Suba o bot com `npm run bot`.
+2. Suba os bots com `npm run bots`.
 3. No jogo, envie `!top` no chat.
-4. Verifique o terminal.
-5. Confirme que não houve erro `fetch failed`.
+4. Envie `!perf` ou `!performance` para validar a mensagem informativa.
+5. Verifique o terminal.
+6. Confirme que não houve erro `fetch failed`.
 
 ## Fluxo Operacional
 
@@ -244,7 +295,20 @@ Quando o bot encontra um evento `MATCH ENDED`:
 - publica o ranking;
 - persiste o identificador do último evento processado.
 
-### 4. Fallback de dados
+### 4. Performance e VIP
+
+Quando o bot de performance encontra `MATCH ENDED`:
+
+- deduplica o evento por memória, cooldown e arquivo de estado;
+- consulta `get_live_game_stats`, `get_team_view` e `get_vip_ids`;
+- calcula melhor comandante, top 3 jogadores da partida e melhor squad de tanque;
+- envia o anúncio público de performance;
+- chama `add_vip` para vencedores sem VIP;
+- envia mensagem privada para cada vencedor premiado.
+
+O comando temporário `!p` fica desativado por padrão. Para testes locais, só habilite com `PERFORMANCE_TEST_COMMAND_ENABLED=true`; nesse modo ele redireciona prévias para o jogador configurado em `PERFORMANCE_TEST_PLAYER_ID`.
+
+### 5. Fallback de dados
 
 O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`, o processo tenta fallback com `get_live_scoreboard`.
 
@@ -264,6 +328,16 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `TOP_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário para coletar dados do ranking. |
 | `BOT_DRY_RUN` | Não | `false` | Não envia mensagens reais; apenas loga as ações. |
 | `BOT_STATE_FILE` | Não | `artifacts/bot-state.json` | Persistência de estado para deduplicação entre restarts. |
+| `TOP_BOT_ENABLED` | Não | `true` | Ativa o bot de `!top` no runner `npm run bots`. |
+| `PERFORMANCE_INFO_BOT_ENABLED` | Não | `true` | Ativa o bot informativo `!perf`/`!performance`. |
+| `PERFORMANCE_BOT_ENABLED` | Não | `false` | Ativa o bot de performance/VIP no runner. |
+| `PERFORMANCE_SEND_PUBLIC` | Não | `true` | Envia anúncio público de performance no `MATCH ENDED`. |
+| `PERFORMANCE_SEND_WINNER_PRIVATE` | Não | `true` | Envia mensagem privada para vencedores premiados. |
+| `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |
+| `PERFORMANCE_VIP_EXPIRATION` | Não | `1 day` | Valor enviado ao campo `expiration` do `add_vip`. |
+| `PERFORMANCE_STATE_FILE` | Não | `artifacts/performance-bot-state.json` | Persistência de estado do bot de performance. |
+| `PERFORMANCE_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown de `MATCH ENDED` do bot de performance. |
+| `PERFORMANCE_TEST_COMMAND_ENABLED` | Não | `false` | Ativa o comando temporário `!p` para prévias controladas. |
 
 ## Deploy em VPS
 
@@ -274,7 +348,7 @@ git clone git@github.com:antoniofrmagalhaes/hll_rcon_topkill_bot.git
 cd hll_rcon_topkill_bot
 cp .env.example .env
 npm install
-npm run bot
+npm run bots
 ```
 
 ### Recomendação de produção
@@ -285,7 +359,7 @@ Para manter o processo persistente, use um supervisor como `pm2` ou `systemd`.
 
 ```bash
 npm install
-pm2 start npm --name hll-topkill-bot -- run bot
+pm2 start npm --name hll-bots -- run bots
 pm2 save
 ```
 
@@ -299,7 +373,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/hll_rcon_topkill_bot
-ExecStart=/usr/bin/npm run bot
+ExecStart=/usr/bin/npm run bots
 Restart=always
 User=www-data
 Environment=NODE_ENV=production
@@ -314,6 +388,8 @@ WantedBy=multi-user.target
 
 - `artifacts/bot.lock`: impede mais de uma instância rodando ao mesmo tempo.
 - `artifacts/bot-state.json`: persiste o último `MATCH ENDED` processado.
+- `artifacts/performance-bot.lock`: lock do bot de performance.
+- `artifacts/performance-bot-state.json`: persiste o último `MATCH ENDED` processado pelo bot de performance.
 - `artifacts/api-docs.json`: snapshot de discovery para referência local.
 
 ### Boas práticas

@@ -6,6 +6,8 @@
   "scripts": {
     "discover": "node src/discover.js",
     "bot": "node src/bot.js",
+    "bots": "node src/runBots.js",
+    "performance": "node src/performanceBot.js",
     "performance:info": "node src/performanceInfoBot.js",
     "clear": "node src/clear.js"
   },

@@ -166,15 +166,22 @@ function shouldSkipByCooldown(log, cfg) {
 
 function formatPerformanceInfoMessage() {
   return [
-    "VIP por performance",
+    "VIP Por Performance",
     "",
-    "No fim da partida, o servidor premia com 1 dia de VIP:",
-    "- melhor comandante",
-    "- top 3 jogadores de combate",
-    "- melhor squad de tanque",
+    "Melhor comandante",
+    "Top 3 jogadores da partida",
+    "Melhor squad de tanque",
     "",
-    "Top combate considera kills, KPM quando disponivel, combate, ataque, defesa e suporte.",
-    "Quem ja tem VIP nao acumula dias.",
+    "Comandante:",
+    "suporte x1, combate x1, abates x10, ataque/defesa x0.5",
+    "",
+    "Jogadores:",
+    "kills x20, KPM x100, combate x1, ataque x1, defesa x1, suporte x1.2",
+    "",
+    "Tanque:",
+    "kills x10, combate x1, ataque x1, defesa x1, suporte x1",
+    "",
+    "Premiacao: 1 dia de VIP nao acumulativo.",
   ].join("\n");
 }
 

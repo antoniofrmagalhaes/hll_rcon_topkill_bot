@@ -1,4 +1,6 @@
 const { execSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 
 function listBotPids() {
   const output = execSync("ps -eo pid=,args=", { encoding: "utf8" });
@@ -12,7 +14,11 @@ function listBotPids() {
     })
     .filter(Boolean)
     .filter((proc) => proc.pid !== process.pid)
-    .filter((proc) => /node\b/.test(proc.cmd) && /src\/bot\.js\b/.test(proc.cmd))
+    .filter(
+      (proc) =>
+        /node\b/.test(proc.cmd) &&
+        /(src\/bot\.js|src\/performanceInfoBot\.js|src\/performanceBot\.js|src\/runBots\.js)\b/.test(proc.cmd)
+    )
     .map((proc) => proc.pid);
 }
 
@@ -35,18 +41,27 @@ async function main() {
 
   if (!pids.length) {
     console.log("[clear] nenhum processo do bot encontrado");
-    return;
+  } else {
+    killPids(pids, "SIGTERM");
+    await sleep(500);
+
+    const remaining = listBotPids().filter((pid) => pids.includes(pid));
+    if (remaining.length) {
+      killPids(remaining, "SIGKILL");
+    }
+
+    console.log(`[clear] processos encerrados: ${pids.join(", ")}`);
   }
 
-  killPids(pids, "SIGTERM");
-  await sleep(500);
-
-  const remaining = listBotPids().filter((pid) => pids.includes(pid));
-  if (remaining.length) {
-    killPids(remaining, "SIGKILL");
+  for (const file of ["bot.lock", "performance-info-bot.lock", "performance-bot.lock"]) {
+    const lockPath = path.resolve(__dirname, "..", "artifacts", file);
+    try {
+      fs.unlinkSync(lockPath);
+      console.log(`[clear] lock removido: ${lockPath}`);
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
   }
-
-  console.log(`[clear] processos encerrados: ${pids.join(", ")}`);
 }
 
 main().catch((err) => {
