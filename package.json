@@ -1,7 +1,7 @@
 {
   "name": "hll-bots",
   "version": "1.0.0",
-  "description": "Discovery + bot para CRCON/HLL (top 10 matadores)",
+  "description": "Bots de automação para servidores Hell Let Loose via CRCON",
   "main": "src/bot.js",
   "scripts": {
     "discover": "node src/discover.js",
