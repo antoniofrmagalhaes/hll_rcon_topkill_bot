@@ -6,7 +6,18 @@ O bot enviava `expiration: "1 day"` diretamente para `add_vip`. No CRCON v11.10.
 
 O campo `name` retornado por `get_vip_ids` veio preenchido com a descricao enviada pelo bot (`VIP performance: ...`), nao com o nome real do jogador. As tentativas de resolver nome por `get_players_history`, `get_player_profile`, `get_player_info` e `get_detailed_player_info` nao retornaram nome para estes IDs.
 
-## Remover manualmente
+## Status
+
+Removidos via endpoint `remove_vip` em 2026-05-06 21:42:41 -04.
+
+Antes de remover, os 24 registros ainda batiam com os guardas:
+
+- `name` com prefixo `VIP performance:`
+- `vip_expiration` com prefixo `3000-01-01`
+
+Depois da remocao, a verificacao em `get_vip_ids` retornou `remaining_bugged_count=0`.
+
+## Registros removidos
 
 | Player ID | Categoria | Expiracao atual |
 | --- | --- | --- |
