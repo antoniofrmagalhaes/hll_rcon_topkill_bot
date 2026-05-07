@@ -37,7 +37,7 @@
 Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conectados ao CRCON:
 
 - descobre e valida endpoints da API;
-- monitora logs recentes para capturar os comandos `!top`, `!perf` e `!performance`;
+- monitora logs recentes para capturar os comandos `!top`, `!nodos`, `!perf` e `!performance`;
 - envia o ranking de abates em mensagem privada para quem acionou o comando;
 - detecta `MATCH ENDED` e publica automaticamente o top da partida;
 - detecta `MATCH ENDED` no bot de performance, publica os vencedores e concede VIP de 1 dia;
@@ -62,7 +62,7 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
   </tr>
   <tr>
     <td><strong>Bots atuais</strong></td>
-    <td><code>top</code>, <code>performance</code> e <code>performance-info</code>.</td>
+    <td><code>top</code>, <code>nodos</code>, <code>performance</code> e <code>performance-info</code>.</td>
   </tr>
 </table>
 
@@ -85,6 +85,16 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 - monta o ranking da partida;
 - publica o top para o servidor;
 - evita republicação indevida após restart usando estado persistido.
+
+</details>
+
+<details open>
+  <summary><strong>Nodos: comando <code>!nodos</code> no chat</strong></summary>
+
+- permite uso pelo comandante do time ou pelo `ADMINISTRADOR_ID`;
+- identifica oficiais e engenheiros do mesmo time via `get_team_view`;
+- envia lembrete privado para oficiais cobrarem engenheiros;
+- envia lembrete privado para engenheiros construirem nodos na base/ultimo ponto.
 
 </details>
 
@@ -258,6 +268,7 @@ npm install
 | `npm run bots` | Sobe o runner com todos os bots habilitados por ambiente. |
 | `npm run performance` | Sobe apenas o Performance Bot. |
 | `npm run performance:info` | Sobe apenas o Performance Info Bot. |
+| `npm run stop` | Encerra processos conhecidos e remove locks operacionais. |
 | `npm run clear` | Encerra processos conhecidos e remove locks operacionais. |
 
 ### Discovery da API
@@ -285,7 +296,7 @@ Esse comando sobe o Top Bot, o Performance Info Bot e, quando `PERFORMANCE_BOT_E
 ### Encerrar processos e limpar locks
 
 ```bash
-npm run clear
+npm run stop
 ```
 
 ### Smoke test manual
@@ -333,7 +344,16 @@ Quando o bot encontra um evento `MATCH ENDED`:
 - publica o ranking;
 - persiste o identificador do último evento processado.
 
-### 5. Performance e VIP
+### 5. Comando `!nodos`
+
+Quando o Top Bot encontra `!nodos`:
+
+- consulta `get_team_view`;
+- valida se o emissor tem papel de comandante do time ou corresponde ao `ADMINISTRADOR_ID`;
+- localiza oficiais e engenheiros do mesmo time;
+- envia mensagens privadas para esses jogadores pedindo construcao de nodos.
+
+### 6. Performance e VIP
 
 Quando o bot de performance encontra `MATCH ENDED`:
 
@@ -344,9 +364,9 @@ Quando o bot de performance encontra `MATCH ENDED`:
 - chama `add_vip` para vencedores sem VIP;
 - envia mensagem privada para cada vencedor premiado.
 
-O comando temporário `!p` fica desativado por padrão. Para testes locais, só habilite com `PERFORMANCE_TEST_COMMAND_ENABLED=true`; nesse modo ele redireciona prévias para o jogador configurado em `PERFORMANCE_TEST_PLAYER_ID`.
+Os comandos administrativos `!p` e `!t` ficam desativados por padrão. Para testes locais, configure `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`; nesse modo, só o jogador com esse SteamID pode executar os comandos e todas as prévias são enviadas por mensagem privada para o próprio administrador.
 
-### 6. Fallback de dados
+### 7. Fallback de dados
 
 O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`, o processo tenta fallback com `get_live_scoreboard`.
 
@@ -369,6 +389,8 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `TOP_BOT_ENABLED` | Não | `true` | Ativa o bot de `!top` no runner `npm run bots`. |
 | `PERFORMANCE_INFO_BOT_ENABLED` | Não | `true` | Ativa o bot informativo `!perf`/`!performance`. |
 | `PERFORMANCE_BOT_ENABLED` | Não | `false` | Ativa o bot de performance/VIP no runner. |
+| `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos de preview, como `!p` e `!t`. |
+| `ADMINISTRADOR_ID` | Para comandos administrativos | - | SteamID autorizado a executar comandos administrativos e receber as prévias por privado. Tambem pode acionar `!nodos` sem ser comandante, se estiver em um time. |
 | `PERFORMANCE_INFO_DRY_RUN` | Não | `false` | Não envia respostas reais do Performance Info Bot; apenas loga as ações. |
 | `PERFORMANCE_INFO_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Info Bot. |
@@ -382,14 +404,8 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `PERFORMANCE_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Bot. |
 | `PERFORMANCE_LOCK_FILE` | Não | `artifacts/performance-bot.lock` | Arquivo de lock do Performance Bot. |
 | `PERFORMANCE_STATE_FILE` | Não | `artifacts/performance-bot-state.json` | Persistência de estado do bot de performance. |
-| `PERFORMANCE_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown do comando temporário de teste do Performance Bot. |
 | `PERFORMANCE_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown de `MATCH ENDED` do bot de performance. |
 | `PERFORMANCE_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário para coleta dos dados de performance. |
-| `PERFORMANCE_TEST_COMMAND_ENABLED` | Não | `false` | Ativa o comando temporário `!p` para prévias controladas. |
-| `PERFORMANCE_TEST_COMMAND` | Não | `!p` | Comando temporário usado quando `PERFORMANCE_TEST_COMMAND_ENABLED=true`. |
-| `PERFORMANCE_TEST_PLAYER_ID` | Não | `76561198111554293` | Jogador autorizado a usar o comando temporário de teste. |
-| `PERFORMANCE_TEST_PLAYER_NAME` | Não | `GAEL` | Nome usado nos logs/mensagens do modo de teste. |
-| `PERFORMANCE_SEND_PRIVATE` | Não | `true` | Envia mensagens privadas de prévia no modo de teste. |
 
 ## Deploy em VPS
 

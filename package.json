@@ -9,6 +9,7 @@
     "bots": "node src/runBots.js",
     "performance": "node src/performanceBot.js",
     "performance:info": "node src/performanceInfoBot.js",
+    "stop": "node src/clear.js",
     "clear": "node src/clear.js"
   },
   "keywords": [],

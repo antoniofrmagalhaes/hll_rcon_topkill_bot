@@ -6,9 +6,13 @@ const path = require("path");
 const { readEnv } = require("./config");
 const { RconClient } = require("./rconClient");
 const { normalizePlayers, computeTopKillers, formatTopMessage } = require("./top");
+const { adminCommandKey, isAdminActor, isAdminCommand } = require("./adminCommands");
+const { handleNodosCommand, isNodosCommand, nodosCommandKey } = require("./nodos");
 
 const seenChatEvents = new Set();
 const seenTopCommands = new Set();
+const seenTopPreviewCommands = new Set();
+const seenNodosCommands = new Set();
 const topCommandCooldownByActor = new Map();
 const seenMatchEndEvents = new Set();
 let logsWarmedUp = false;
@@ -209,6 +213,10 @@ function isTopCommand(log) {
 
   const content = String(log.sub_content || "").trim().toLowerCase();
   return content === "!top" || content.startsWith("!top ");
+}
+
+function isTopPreviewCommand(log, cfg) {
+  return isAdminCommand(log, cfg, "!t");
 }
 
 function summarizeScoreboardResponse(resp) {
@@ -465,6 +473,12 @@ async function pollLogs(client, cfg) {
         if (isTopCommand(log)) {
           remember(seenTopCommands, topCommandKey(log));
         }
+        if (isTopPreviewCommand(log, cfg)) {
+          remember(seenTopPreviewCommands, adminCommandKey(log, "top"));
+        }
+        if (isNodosCommand(log)) {
+          remember(seenNodosCommands, nodosCommandKey(log));
+        }
       }
       if (String(log.action || "") === "MATCH ENDED") {
         remember(seenMatchEndEvents, matchEndKey(log));
@@ -477,6 +491,34 @@ async function pollLogs(client, cfg) {
   let latestMatchEndedLog = null;
   for (const log of logs) {
     const key = eventKey(log);
+
+    if (isTopPreviewCommand(log, cfg)) {
+      const commandKey = adminCommandKey(log, "top");
+      if (seenTopPreviewCommands.has(commandKey)) continue;
+      remember(seenTopPreviewCommands, commandKey);
+      remember(seenChatEvents, key);
+
+      if (!isAdminActor(log, cfg)) {
+        logInfo("[event] admin !t ignored because player is not allowed", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+          content: log.sub_content || null,
+          adminId: cfg.adminId,
+        });
+        continue;
+      }
+
+      logInfo("[event] admin !t detected", {
+        byPlayer: log.player_name_1 || null,
+        playerId: log.player_id_1 || null,
+        content: log.sub_content || null,
+      });
+      await broadcastTop(client, cfg, "preview administrativo !t", {
+        playerId: cfg.adminId,
+        playerName: "",
+      });
+      continue;
+    }
 
     if (isTopCommand(log)) {
       const commandKey = topCommandKey(log);
@@ -503,6 +545,30 @@ async function pollLogs(client, cfg) {
         playerId: log.player_id_1 || "",
         playerName: log.player_name_1 || "",
       });
+      continue;
+    }
+
+    if (isNodosCommand(log)) {
+      const commandKey = nodosCommandKey(log);
+      if (seenNodosCommands.has(commandKey)) continue;
+      if (shouldSkipTopCommandByCooldown(log, cfg)) {
+        logInfo("[event] !nodos skipped by cooldown", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+          content: log.sub_content || null,
+          cooldownMs: cfg.topCommandCooldownMs,
+        });
+        continue;
+      }
+      remember(seenNodosCommands, commandKey);
+      remember(seenChatEvents, key);
+
+      logInfo("[event] !nodos detected", {
+        byPlayer: log.player_name_1 || null,
+        playerId: log.player_id_1 || null,
+        content: log.sub_content || null,
+      });
+      await handleNodosCommand(client, cfg, log, logInfo);
       continue;
     }
 
@@ -563,6 +629,8 @@ async function main() {
     topLimit: cfg.topLimit,
     topStatsEndpoint: cfg.topStatsEndpoint,
     dryRun: cfg.dryRun,
+    enableTestCommands: cfg.enableTestCommands,
+    adminId: cfg.adminId,
     topCommandCooldownMs: cfg.topCommandCooldownMs,
     matchEndedCooldownMs: cfg.matchEndedCooldownMs,
     stateFilePath,

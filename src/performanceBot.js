@@ -5,6 +5,13 @@ const path = require("path");
 
 const { RconClient } = require("./rconClient");
 const {
+  adminCommandKey,
+  isAdminActor,
+  isAdminCommand,
+  readAdminCommandConfig,
+  sendAdminPrivate,
+} = require("./adminCommands");
+const {
   applyVipIds,
   buildPerformanceResult,
   formatPerformanceMessage,
@@ -15,7 +22,6 @@ const {
 const required = ["RCON_API_TOKEN", "RCON_BASE_URL"];
 const seenCommands = new Set();
 const seenMatchEndEvents = new Set();
-const commandCooldownByActor = new Map();
 let logsWarmedUp = false;
 let lockFilePath = null;
 let lockFd = null;
@@ -48,6 +54,8 @@ function readEnv() {
     }
   }
 
+  const adminCommandConfig = readAdminCommandConfig(process.env);
+
   return {
     baseUrl: process.env.RCON_BASE_URL.replace(/\/$/, ""),
     token: process.env.RCON_API_TOKEN,
@@ -58,19 +66,13 @@ function readEnv() {
     matchEndedCooldownMs: Number(
       process.env.PERFORMANCE_MATCH_ENDED_COOLDOWN_MS || process.env.BOT_MATCH_ENDED_COOLDOWN_MS || 300000
     ),
-    commandCooldownMs: Number(
-      process.env.PERFORMANCE_COMMAND_COOLDOWN_MS || process.env.BOT_TOP_COMMAND_COOLDOWN_MS || 15000
-    ),
     statsEndpoint: process.env.PERFORMANCE_STATS_ENDPOINT || process.env.TOP_STATS_ENDPOINT || "get_live_game_stats",
     sendPublic: String(process.env.PERFORMANCE_SEND_PUBLIC || "true").toLowerCase() !== "false",
     sendWinnerPrivate: String(process.env.PERFORMANCE_SEND_WINNER_PRIVATE || "true").toLowerCase() !== "false",
     grantVip: String(process.env.PERFORMANCE_GRANT_VIP || "true").toLowerCase() !== "false",
     vipExpiration: process.env.PERFORMANCE_VIP_EXPIRATION || "1 day",
-    testCommandEnabled: String(process.env.PERFORMANCE_TEST_COMMAND_ENABLED || "false").toLowerCase() === "true",
-    testCommand: normalizeText(process.env.PERFORMANCE_TEST_COMMAND || "!p"),
-    testPlayerId: String(process.env.PERFORMANCE_TEST_PLAYER_ID || "76561198111554293").trim(),
-    testPlayerName: process.env.PERFORMANCE_TEST_PLAYER_NAME || "GAEL",
-    sendPrivate: String(process.env.PERFORMANCE_SEND_PRIVATE || "true").toLowerCase() !== "false",
+    ...adminCommandConfig,
+    logInfo,
   };
 }
 
@@ -197,51 +199,11 @@ function saveState() {
 }
 
 function isPerformanceCommand(log, cfg) {
-  if (!cfg.testCommandEnabled) return false;
-  if (!log || typeof log !== "object") return false;
-  if (!String(log.action || "").startsWith("CHAT")) return false;
-
-  const content = normalizeText(log.sub_content);
-  return content === cfg.testCommand || content.startsWith(`${cfg.testCommand} `);
-}
-
-function isAllowedTester(log, cfg) {
-  return String(log?.player_id_1 || "").trim() === cfg.testPlayerId;
+  return isAdminCommand(log, cfg, "!p");
 }
 
 function commandKey(log) {
-  const playerRef = String(log?.player_id_1 || "").trim() || normalizeText(log?.player_name_1) || "unknown";
-  const normalizedRaw = normalizeText(log?.raw);
-  if (normalizedRaw) {
-    return `performance-command|${playerRef}|${normalizedRaw}`;
-  }
-
-  const ts = Number(log?.timestamp_ms || 0);
-  const bucket = Number.isFinite(ts) && ts > 0 ? Math.floor(ts / 1000) : "no-ts";
-  return `performance-command|${playerRef}|${normalizeText(log?.sub_content)}|${bucket}`;
-}
-
-function commandActorKey(log) {
-  const playerId = String(log?.player_id_1 || "").trim();
-  const playerName = normalizeText(log?.player_name_1);
-  return playerId || playerName || "unknown";
-}
-
-function shouldSkipByCooldown(log, cfg) {
-  const actorKey = commandActorKey(log);
-  const nowMs = Date.now();
-  const lastMs = Number(commandCooldownByActor.get(actorKey) || 0);
-  const elapsedMs = nowMs - lastMs;
-  if (lastMs > 0 && elapsedMs >= 0 && elapsedMs < cfg.commandCooldownMs) {
-    return true;
-  }
-
-  commandCooldownByActor.set(actorKey, nowMs);
-  if (commandCooldownByActor.size > 2000) {
-    const firstKey = commandCooldownByActor.keys().next().value;
-    commandCooldownByActor.delete(firstKey);
-  }
-  return false;
+  return adminCommandKey(log, "performance");
 }
 
 function matchEndKey(log) {
@@ -312,8 +274,7 @@ async function collectPerformance(client, cfg) {
       category: preview.category,
       originalPlayerId: preview.player?.playerId || null,
       originalPlayerName: preview.player?.playerName || null,
-      redirectedToPlayerId: cfg.testPlayerId,
-      redirectedToPlayerName: cfg.testPlayerName,
+      redirectedToAdminId: cfg.adminId,
       message: preview.message,
     })),
   });
@@ -420,39 +381,17 @@ async function grantVipForWinner(client, cfg, preview) {
   return true;
 }
 
-async function sendPrivateToTester(client, cfg, message, metadata = {}) {
-  if (!cfg.sendPrivate) {
-    logInfo("[performance] private send disabled by config", { message, metadata });
-    return;
-  }
-
-  logInfo("[performance] sending redirected private preview", {
-    playerId: cfg.testPlayerId,
-    playerName: cfg.testPlayerName,
-    originalPlayerId: metadata.originalPlayerId || null,
-    originalPlayerName: metadata.originalPlayerName || null,
-    previewType: metadata.previewType || null,
-    message,
-  });
-
-  await client.post("message_player", {
-    player_id: cfg.testPlayerId,
-    player_name: cfg.testPlayerName,
-    message,
-    by: "hll-performance-bot-test",
-    save_message: false,
-  });
-}
-
 async function sendPerformancePreviews(client, cfg, message, privateWinnerMessages) {
-  await sendPrivateToTester(client, cfg, message, {
+  await sendAdminPrivate(client, cfg, message, {
+    by: "hll-performance-bot-test",
     previewType: "public-performance-message",
     originalPlayerId: "message_all_players",
     originalPlayerName: "Todos os jogadores",
   });
 
   for (const preview of privateWinnerMessages) {
-    await sendPrivateToTester(client, cfg, preview.message, {
+    await sendAdminPrivate(client, cfg, preview.message, {
+      by: "hll-performance-bot-test",
       previewType: `private-${preview.category}`,
       originalPlayerId: preview.player?.playerId || "",
       originalPlayerName: preview.player?.playerName || "",
@@ -564,27 +503,17 @@ async function pollLogs(client, cfg) {
     if (seenCommands.has(key)) continue;
     remember(seenCommands, key);
 
-    if (!isAllowedTester(log, cfg)) {
-      logInfo("[event] temporary !p ignored because player is not allowed", {
+    if (!isAdminActor(log, cfg)) {
+      logInfo("[event] admin !p ignored because player is not allowed", {
         playerId: log.player_id_1 || null,
         playerName: log.player_name_1 || null,
         content: log.sub_content || null,
-        allowedPlayerId: cfg.testPlayerId,
+        adminId: cfg.adminId,
       });
       continue;
     }
 
-    if (shouldSkipByCooldown(log, cfg)) {
-      logInfo("[event] temporary !p skipped by cooldown", {
-        playerId: log.player_id_1 || null,
-        playerName: log.player_name_1 || null,
-        content: log.sub_content || null,
-        cooldownMs: cfg.commandCooldownMs,
-      });
-      continue;
-    }
-
-    logInfo("[event] temporary !p detected", {
+    logInfo("[event] admin !p detected", {
       playerId: log.player_id_1 || null,
       playerName: log.player_name_1 || null,
       content: log.sub_content || null,
@@ -638,18 +567,14 @@ async function main() {
     logWindow: cfg.logWindow,
     lockFilePath,
     stateFilePath,
-    commandCooldownMs: cfg.commandCooldownMs,
     matchEndedCooldownMs: cfg.matchEndedCooldownMs,
     statsEndpoint: cfg.statsEndpoint,
     sendPublic: cfg.sendPublic,
     sendWinnerPrivate: cfg.sendWinnerPrivate,
     grantVip: cfg.grantVip,
     vipExpiration: cfg.vipExpiration,
-    testCommandEnabled: cfg.testCommandEnabled,
-    testCommand: cfg.testCommand,
-    testPlayerId: cfg.testPlayerId,
-    testPlayerName: cfg.testPlayerName,
-    sendPrivate: cfg.sendPrivate,
+    enableTestCommands: cfg.enableTestCommands,
+    adminId: cfg.adminId,
     lastMatchEndKey: state.lastMatchEndKey,
     lastMatchEndedAtMs: state.lastMatchEndedAtMs,
   });
