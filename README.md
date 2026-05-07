@@ -334,7 +334,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `PERFORMANCE_SEND_PUBLIC` | Não | `true` | Envia anúncio público de performance no `MATCH ENDED`. |
 | `PERFORMANCE_SEND_WINNER_PRIVATE` | Não | `true` | Envia mensagem privada para vencedores premiados. |
 | `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |
-| `PERFORMANCE_VIP_EXPIRATION` | Não | `1 day` | Valor enviado ao campo `expiration` do `add_vip`. |
+| `PERFORMANCE_VIP_EXPIRATION` | Não | `1 day` | Duracao relativa (`1 day`, `24 hours`, `90 minutes`) ou data ISO; o bot converte para timestamp absoluto antes do `add_vip`. |
 | `PERFORMANCE_STATE_FILE` | Não | `artifacts/performance-bot-state.json` | Persistência de estado do bot de performance. |
 | `PERFORMANCE_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown de `MATCH ENDED` do bot de performance. |
 | `PERFORMANCE_TEST_COMMAND_ENABLED` | Não | `false` | Ativa o comando temporário `!p` para prévias controladas. |
@@ -388,6 +388,7 @@ WantedBy=multi-user.target
 
 - `artifacts/bot.lock`: impede mais de uma instância rodando ao mesmo tempo.
 - `artifacts/bot-state.json`: persiste o último `MATCH ENDED` processado.
+- `docs/performance-vips-permanentes-2026-05-07.md`: registro dos VIPs permanentes criados pelo bug de expiração do bot de performance.
 - `artifacts/performance-bot.lock`: lock do bot de performance.
 - `artifacts/performance-bot-state.json`: persiste o último `MATCH ENDED` processado pelo bot de performance.
 - `artifacts/api-docs.json`: snapshot de discovery para referência local.

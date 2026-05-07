@@ -348,6 +348,44 @@ function vipDescriptionFor(preview) {
   return "VIP performance: top jogadores da partida";
 }
 
+function resolveVipExpiration(value, now = new Date()) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    throw new Error("PERFORMANCE_VIP_EXPIRATION is empty; refusing to create permanent VIP");
+  }
+
+  if (/^(none|null|never|permanent|forever)$/i.test(raw)) {
+    throw new Error(`PERFORMANCE_VIP_EXPIRATION=${raw} would create permanent VIP; refusing`);
+  }
+
+  const relative = raw.match(/^(\d+(?:\.\d+)?)\s*(d|day|days|h|hour|hours|m|min|minute|minutes)$/i);
+  if (relative) {
+    const amount = Number(relative[1]);
+    const unit = relative[2].toLowerCase();
+    const unitMs = unit.startsWith("d")
+      ? 24 * 60 * 60 * 1000
+      : unit.startsWith("h")
+        ? 60 * 60 * 1000
+        : 60 * 1000;
+    const expiresAtMs = now.getTime() + amount * unitMs;
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now.getTime()) {
+      throw new Error(`Invalid PERFORMANCE_VIP_EXPIRATION relative duration: ${raw}`);
+    }
+    return new Date(expiresAtMs).toISOString();
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new Error(
+      `Invalid PERFORMANCE_VIP_EXPIRATION=${raw}; use a relative duration like "1 day" or an ISO date`
+    );
+  }
+  if (parsed.getTime() <= now.getTime()) {
+    throw new Error(`PERFORMANCE_VIP_EXPIRATION=${raw} is not in the future`);
+  }
+  return parsed.toISOString();
+}
+
 async function grantVipForWinner(client, cfg, preview) {
   const playerId = String(preview?.player?.playerId || "").trim();
   if (!playerId) {
@@ -370,10 +408,11 @@ async function grantVipForWinner(client, cfg, preview) {
   const payload = {
     player_id: playerId,
     description: vipDescriptionFor(preview),
-    expiration: cfg.vipExpiration,
+    expiration: resolveVipExpiration(cfg.vipExpiration),
   };
   logInfo("[vip] adding VIP", {
     ...payload,
+    configuredExpiration: cfg.vipExpiration,
     playerName: preview.player.playerName,
     category: preview.category,
   });
