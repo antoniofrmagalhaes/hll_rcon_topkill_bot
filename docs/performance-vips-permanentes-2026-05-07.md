@@ -17,6 +17,15 @@ Antes de remover, os 24 registros ainda batiam com os guardas:
 
 Depois da remocao, a verificacao em `get_vip_ids` retornou `remaining_bugged_count=0`.
 
+Em seguida, os mesmos 24 jogadores receberam novamente VIP de 1 dia via `add_vip`, usando timestamp absoluto:
+
+- concedido em 2026-05-06 21:44:50 -04
+- `expiration = 2026-05-08T01:44:38.183Z`
+- `granted_count=24`
+- `present_after_count=24`
+- `missing_after_count=0`
+- `permanent_after_count=0`
+
 ## Registros removidos
 
 | Player ID | Categoria | Expiracao atual |
