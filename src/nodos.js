@@ -11,7 +11,7 @@ function isNodosCommand(log) {
   if (!String(log.action || "").startsWith("CHAT")) return false;
 
   const content = normalizeText(log.sub_content);
-  return content === "!nodos" || content.startsWith("!nodos ");
+  return content === "!n" || content.startsWith("!n ") || content === "!nodos" || content.startsWith("!nodos ");
 }
 
 function nodosCommandKey(log) {

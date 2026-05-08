@@ -37,7 +37,7 @@
 Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conectados ao CRCON:
 
 - descobre e valida endpoints da API;
-- monitora logs recentes para capturar os comandos `!top`, `!nodos`, `!perf` e `!performance`;
+- monitora logs recentes para capturar os comandos `!top`, `!n`, `!nodos`, `!perf` e `!performance`;
 - envia o ranking de abates em mensagem privada para quem acionou o comando;
 - detecta `MATCH ENDED` e publica automaticamente o top da partida;
 - detecta `MATCH ENDED` no bot de performance, publica os vencedores e concede VIP de 1 dia;
@@ -89,7 +89,7 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 </details>
 
 <details open>
-  <summary><strong>Nodos: comando <code>!nodos</code> no chat</strong></summary>
+  <summary><strong>Nodos: comando <code>!n</code> / <code>!nodos</code> no chat</strong></summary>
 
 - permite uso pelo comandante do time ou pelo `ADMINISTRADOR_ID`;
 - identifica oficiais e engenheiros do mesmo time via `get_team_view`;
@@ -344,9 +344,9 @@ Quando o bot encontra um evento `MATCH ENDED`:
 - publica o ranking;
 - persiste o identificador do último evento processado.
 
-### 5. Comando `!nodos`
+### 5. Comando `!n` / `!nodos`
 
-Quando o Top Bot encontra `!nodos`:
+Quando o Top Bot encontra `!n` ou `!nodos`:
 
 - consulta `get_team_view`;
 - valida se o emissor tem papel de comandante do time ou corresponde ao `ADMINISTRADOR_ID`;
