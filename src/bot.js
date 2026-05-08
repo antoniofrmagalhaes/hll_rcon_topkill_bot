@@ -8,11 +8,13 @@ const { RconClient } = require("./rconClient");
 const { normalizePlayers, computeTopKillers, formatTopMessage } = require("./top");
 const { adminCommandKey, isAdminActor, isAdminCommand } = require("./adminCommands");
 const { handleNodosCommand, isNodosCommand, nodosCommandKey } = require("./nodos");
+const { handleOpCommand, isOpCommand, opCommandKey } = require("./op");
 
 const seenChatEvents = new Set();
 const seenTopCommands = new Set();
 const seenTopPreviewCommands = new Set();
 const seenNodosCommands = new Set();
+const seenOpCommands = new Set();
 const topCommandCooldownByActor = new Map();
 const seenMatchEndEvents = new Set();
 let logsWarmedUp = false;
@@ -479,6 +481,9 @@ async function pollLogs(client, cfg) {
         if (isNodosCommand(log)) {
           remember(seenNodosCommands, nodosCommandKey(log));
         }
+        if (isOpCommand(log)) {
+          remember(seenOpCommands, opCommandKey(log));
+        }
       }
       if (String(log.action || "") === "MATCH ENDED") {
         remember(seenMatchEndEvents, matchEndKey(log));
@@ -572,6 +577,40 @@ async function pollLogs(client, cfg) {
       continue;
     }
 
+    if (isOpCommand(log)) {
+      const commandKey = opCommandKey(log);
+      if (seenOpCommands.has(commandKey)) continue;
+      if (!cfg.opBotEnabled) {
+        remember(seenOpCommands, commandKey);
+        remember(seenChatEvents, key);
+        logInfo("[event] !op ignored: op bot disabled in config", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+          content: log.sub_content || null,
+        });
+        continue;
+      }
+      remember(seenOpCommands, commandKey);
+      remember(seenChatEvents, key);
+      if (shouldSkipTopCommandByCooldown(log, cfg)) {
+        logInfo("[event] !op skipped by cooldown", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+          content: log.sub_content || null,
+          cooldownMs: cfg.topCommandCooldownMs,
+        });
+        continue;
+      }
+
+      logInfo("[event] !op detected", {
+        byPlayer: log.player_name_1 || null,
+        playerId: log.player_id_1 || null,
+        content: log.sub_content || null,
+      });
+      await handleOpCommand(client, cfg, log, logInfo);
+      continue;
+    }
+
     if (String(log.action || "") === "MATCH ENDED") {
       const currentTs = Number(log.timestamp_ms || 0);
       const currentLatestTs = Number(latestMatchEndedLog?.timestamp_ms || 0);
@@ -629,6 +668,7 @@ async function main() {
     topLimit: cfg.topLimit,
     topStatsEndpoint: cfg.topStatsEndpoint,
     dryRun: cfg.dryRun,
+    opBotEnabled: cfg.opBotEnabled,
     enableTestCommands: cfg.enableTestCommands,
     adminId: cfg.adminId,
     topCommandCooldownMs: cfg.topCommandCooldownMs,

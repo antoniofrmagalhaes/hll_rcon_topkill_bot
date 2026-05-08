@@ -37,8 +37,9 @@
 Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conectados ao CRCON:
 
 - descobre e valida endpoints da API;
-- monitora logs recentes para capturar os comandos `!top`, `!n`, `!nodos`, `!perf` e `!performance`;
+- monitora logs recentes para capturar os comandos `!top`, `!op`, `!n`, `!nodos`, `!perf` e `!performance`;
 - envia o ranking de abates em mensagem privada para quem acionou o comando;
+- envia lembrete privado de OP para o oficial do squad quando o comando `!op` passa nas regras de tag;
 - detecta `MATCH ENDED` e publica automaticamente o top da partida;
 - detecta `MATCH ENDED` no bot de performance, publica os vencedores e concede VIP de 1 dia;
 - evita duplicações com cooldown, memória de eventos e persistência de estado.
@@ -62,7 +63,7 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
   </tr>
   <tr>
     <td><strong>Bots atuais</strong></td>
-    <td><code>top</code>, <code>nodos</code>, <code>performance</code> e <code>performance-info</code>.</td>
+    <td><code>top</code>, <code>op</code>, <code>nodos</code>, <code>performance</code> e <code>performance-info</code>.</td>
   </tr>
 </table>
 
@@ -85,6 +86,17 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 - monta o ranking da partida;
 - publica o top para o servidor;
 - evita republicação indevida após restart usando estado persistido.
+
+</details>
+
+<details open>
+  <summary><strong>OP Bot: comando <code>!op</code> no chat</strong></summary>
+
+- valida se o emissor usa prefixo `≫ ` ou `»BAIN« `;
+- consulta `get_team_view` para localizar o squad do emissor;
+- identifica o oficial do mesmo squad;
+- exige que o oficial também use um dos prefixos aceitos;
+- envia mensagem privada para o oficial cobrando OP.
 
 </details>
 
@@ -147,6 +159,7 @@ src/runBots.js
   ├─ src/bot.js
   │   ├─ detecção de !top
   │   ├─ preview administrativo !t
+  │   ├─ lembrete de OP !op
   │   ├─ lembrete de nodos !n / !nodos
   │   └─ anúncio de top kill em MATCH ENDED
   ├─ src/performanceInfoBot.js
@@ -159,6 +172,7 @@ src/runBots.js
         │
         ├─ src/adminCommands.js
         ├─ src/nodos.js
+        ├─ src/op.js
         ├─ src/rconClient.js
         ├─ src/top.js
         ├─ src/performance.js
@@ -172,6 +186,7 @@ src/runBots.js
 - O ranking ordena por `kills`, depois `kd`, depois menor número de mortes e por fim nome.
 - Comandos administrativos de preview dependem de `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`.
 - `!p` e `!t` sempre redirecionam a prévia por privado para o administrador, sem publicar no servidor.
+- `!op` é operacional: emissor e oficial do squad precisam usar prefixo de clã aceito.
 - `!n`/`!nodos` é operacional: comandante do time pode acionar; o administrador também pode acionar se estiver em um time.
 - O bot de performance tem estado próprio para processar cada `MATCH ENDED` uma única vez.
 - Cada processo usa arquivo de lock para impedir múltiplas instâncias respondendo ao mesmo tempo.
@@ -198,6 +213,7 @@ src/runBots.js
 │   ├── config.js
 │   ├── discover.js
 │   ├── nodos.js
+│   ├── op.js
 │   ├── performance.js
 │   ├── performanceBot.js
 │   ├── performanceInfoBot.js
@@ -216,9 +232,10 @@ src/runBots.js
 ### Responsabilidade dos módulos
 
 - `src/adminCommands.js`: helpers compartilhados para comandos administrativos, validação de `ADMINISTRADOR_ID` e envio privado.
-- `src/bot.js`: bot de top kill, eventos `!top`/`!t`/`!n`/`!nodos`/`MATCH ENDED`, cooldown, estado e lock de processo.
+- `src/bot.js`: bot de top kill, eventos `!top`/`!t`/`!op`/`!n`/`!nodos`/`MATCH ENDED`, cooldown, estado e lock de processo.
 - `src/discover.js`: discovery dos endpoints disponíveis na API.
 - `src/nodos.js`: valida comandante/admin, localiza oficiais/engenheiros no `get_team_view` e envia lembretes privados de nodos.
+- `src/op.js`: valida tags de clã, localiza o oficial do squad via `get_team_view` e envia lembrete privado de OP.
 - `src/performance.js`: cálculo e formatação dos vencedores de performance.
 - `src/performanceBot.js`: bot de produção para performance/VIP no fim da partida e preview administrativo `!p`.
 - `src/performanceInfoBot.js`: bot informativo para `!perf` e `!performance`.
@@ -320,9 +337,10 @@ npm run stop
 5. Se for testar previews administrativos, configure `ENABLE_TEST_COMMANDS=true` e confira se `ADMINISTRADOR_ID` é o ID real do jogador no servidor.
 6. Envie `!t` para receber a prévia do top abates por privado.
 7. Envie `!p` para receber a prévia de performance por privado.
-8. Envie `!n` ou `!nodos` como comandante, ou como administrador em um time, para validar os lembretes privados de nodos.
-9. Verifique o terminal.
-10. Confirme que não houve erro `fetch failed`.
+8. Envie `!op` como jogador com tag em um squad cujo oficial tambem tenha tag para validar o lembrete privado de OP.
+9. Envie `!n` ou `!nodos` como comandante, ou como administrador em um time, para validar os lembretes privados de nodos.
+10. Verifique o terminal.
+11. Confirme que não houve erro `fetch failed`.
 
 ## Fluxo Operacional
 
@@ -331,6 +349,7 @@ npm run stop
 O `src/runBots.js` inicia cada bot habilitado por variável de ambiente:
 
 - `TOP_BOT_ENABLED=true`: sobe o Top Bot.
+- `OP_BOT_ENABLED=true`: deixa o comando `!op` ativo dentro do Top Bot.
 - `PERFORMANCE_INFO_BOT_ENABLED=true`: sobe o Performance Info Bot.
 - `PERFORMANCE_BOT_ENABLED=true`: sobe o Performance Bot.
 
@@ -360,7 +379,19 @@ Quando o bot encontra um evento `MATCH ENDED`:
 - publica o ranking;
 - persiste o identificador do último evento processado.
 
-### 5. Comando `!n` / `!nodos`
+### 5. Comando `!op`
+
+Quando o Top Bot encontra `!op`:
+
+- valida se o emissor comeca com `≫ ` ou `»BAIN« `;
+- consulta `get_team_view`;
+- localiza o oficial do mesmo squad;
+- valida se o oficial tambem comeca com `≫ ` ou `»BAIN« `;
+- envia PM para o oficial com `MENSAGEM DO PELOTÃO` e `CADE O OP PORRA?!`.
+
+O comando `!op` nao verifica o estado real do outpost, porque o fluxo atual nao tem endpoint/log confiavel para isso. Em `BOT_DRY_RUN=true`, nenhuma PM real e enviada.
+
+### 6. Comando `!n` / `!nodos`
 
 Quando o Top Bot encontra `!n` ou `!nodos`:
 
@@ -369,7 +400,7 @@ Quando o Top Bot encontra `!n` ou `!nodos`:
 - localiza oficiais e engenheiros do mesmo time;
 - envia mensagens privadas para esses jogadores pedindo construcao de nodos.
 
-### 6. Performance e VIP
+### 7. Performance e VIP
 
 Quando o bot de performance encontra `MATCH ENDED`:
 
@@ -395,7 +426,7 @@ Resumo do comando de nodos:
 | --- | --- | --- |
 | `!n` / `!nodos` | Comandante do time ou `ADMINISTRADOR_ID` presente em um time | Privado para oficiais e engenheiros do mesmo time |
 
-### 7. Fallback de dados
+### 8. Fallback de dados
 
 O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`, o processo tenta fallback com `get_live_scoreboard`.
 
@@ -416,6 +447,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `BOT_DRY_RUN` | Não | `false` | Não envia mensagens reais; apenas loga as ações. |
 | `BOT_STATE_FILE` | Não | `artifacts/bot-state.json` | Persistência de estado para deduplicação entre restarts. |
 | `TOP_BOT_ENABLED` | Não | `true` | Ativa o bot de `!top` no runner `npm run bots`. |
+| `OP_BOT_ENABLED` | Não | `true` | Ativa o comando `!op` dentro do Top Bot. |
 | `PERFORMANCE_INFO_BOT_ENABLED` | Não | `true` | Ativa o bot informativo `!perf`/`!performance`. |
 | `PERFORMANCE_BOT_ENABLED` | Não | `false` | Ativa o bot de performance/VIP no runner. |
 | `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos de preview, como `!p` e `!t`. |
@@ -517,6 +549,14 @@ Confira se `RCON_API_TOKEN` e `RCON_BASE_URL` existem no `.env` e estão preench
 - confirme se os logs de chat chegam em `get_recent_logs`;
 - verifique se o conteúdo da mensagem está chegando como `!top`;
 - revise se o usuário caiu no cooldown configurado.
+
+### O bot não responde ao `!op`
+
+- confirme se `OP_BOT_ENABLED` não está como `false`;
+- confirme se os logs de chat chegam em `get_recent_logs` com conteúdo `!op`;
+- valide se emissor e oficial do squad começam com `≫ ` ou `»BAIN« `;
+- confirme se o emissor aparece em um squad no `get_team_view`;
+- revise o cooldown de `BOT_TOP_COMMAND_COOLDOWN_MS`, usado também pelo comando `!op`.
 
 ### `!p` ou `!t` não respondem
 
