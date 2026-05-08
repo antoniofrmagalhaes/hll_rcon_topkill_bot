@@ -146,14 +146,19 @@ CRCON API
 src/runBots.js
   ├─ src/bot.js
   │   ├─ detecção de !top
+  │   ├─ preview administrativo !t
+  │   ├─ lembrete de nodos !n / !nodos
   │   └─ anúncio de top kill em MATCH ENDED
   ├─ src/performanceInfoBot.js
   │   └─ detecção de !perf / !performance
   └─ src/performanceBot.js
+      ├─ preview administrativo !p
       ├─ performance em MATCH ENDED
       ├─ concessão de VIP
       └─ mensagens públicas/privadas
         │
+        ├─ src/adminCommands.js
+        ├─ src/nodos.js
         ├─ src/rconClient.js
         ├─ src/top.js
         ├─ src/performance.js
@@ -165,6 +170,9 @@ src/runBots.js
 - Cada bot faz `1` request de logs por ciclo de polling.
 - Requests de scoreboard e envio de mensagens só acontecem quando há evento relevante.
 - O ranking ordena por `kills`, depois `kd`, depois menor número de mortes e por fim nome.
+- Comandos administrativos de preview dependem de `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`.
+- `!p` e `!t` sempre redirecionam a prévia por privado para o administrador, sem publicar no servidor.
+- `!n`/`!nodos` é operacional: comandante do time pode acionar; o administrador também pode acionar se estiver em um time.
 - O bot de performance tem estado próprio para processar cada `MATCH ENDED` uma única vez.
 - Cada processo usa arquivo de lock para impedir múltiplas instâncias respondendo ao mesmo tempo.
 
@@ -184,10 +192,12 @@ src/runBots.js
 ├── instructions.md
 ├── package.json
 ├── src
+│   ├── adminCommands.js
 │   ├── bot.js
 │   ├── clear.js
 │   ├── config.js
 │   ├── discover.js
+│   ├── nodos.js
 │   ├── performance.js
 │   ├── performanceBot.js
 │   ├── performanceInfoBot.js
@@ -205,10 +215,12 @@ src/runBots.js
 
 ### Responsabilidade dos módulos
 
-- `src/bot.js`: bot de top kill, eventos `!top`/`MATCH ENDED`, cooldown, estado e lock de processo.
+- `src/adminCommands.js`: helpers compartilhados para comandos administrativos, validação de `ADMINISTRADOR_ID` e envio privado.
+- `src/bot.js`: bot de top kill, eventos `!top`/`!t`/`!n`/`!nodos`/`MATCH ENDED`, cooldown, estado e lock de processo.
 - `src/discover.js`: discovery dos endpoints disponíveis na API.
+- `src/nodos.js`: valida comandante/admin, localiza oficiais/engenheiros no `get_team_view` e envia lembretes privados de nodos.
 - `src/performance.js`: cálculo e formatação dos vencedores de performance.
-- `src/performanceBot.js`: bot de produção para performance/VIP no fim da partida.
+- `src/performanceBot.js`: bot de produção para performance/VIP no fim da partida e preview administrativo `!p`.
 - `src/performanceInfoBot.js`: bot informativo para `!perf` e `!performance`.
 - `src/rconClient.js`: cliente HTTP com autenticação Bearer e logging resumido.
 - `src/runBots.js`: runner local/produção para subir os bots juntos.
@@ -305,8 +317,12 @@ npm run stop
 2. Suba os bots com `npm run bots`.
 3. No jogo, envie `!top` no chat.
 4. Envie `!perf` ou `!performance` para validar a mensagem informativa.
-5. Verifique o terminal.
-6. Confirme que não houve erro `fetch failed`.
+5. Se for testar previews administrativos, configure `ENABLE_TEST_COMMANDS=true` e confira se `ADMINISTRADOR_ID` é o ID real do jogador no servidor.
+6. Envie `!t` para receber a prévia do top abates por privado.
+7. Envie `!p` para receber a prévia de performance por privado.
+8. Envie `!n` ou `!nodos` como comandante, ou como administrador em um time, para validar os lembretes privados de nodos.
+9. Verifique o terminal.
+10. Confirme que não houve erro `fetch failed`.
 
 ## Fluxo Operacional
 
@@ -365,6 +381,19 @@ Quando o bot de performance encontra `MATCH ENDED`:
 - envia mensagem privada para cada vencedor premiado.
 
 Os comandos administrativos `!p` e `!t` ficam desativados por padrão. Para testes locais, configure `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`; nesse modo, só o jogador com esse SteamID pode executar os comandos e todas as prévias são enviadas por mensagem privada para o próprio administrador.
+
+Resumo dos comandos administrativos:
+
+| Comando | Bot | Requisito | Destino |
+| --- | --- | --- | --- |
+| `!t` | Top Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
+| `!p` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
+
+Resumo do comando de nodos:
+
+| Comando | Requisito | Destino |
+| --- | --- | --- |
+| `!n` / `!nodos` | Comandante do time ou `ADMINISTRADOR_ID` presente em um time | Privado para oficiais e engenheiros do mesmo time |
 
 ### 7. Fallback de dados
 
@@ -488,6 +517,22 @@ Confira se `RCON_API_TOKEN` e `RCON_BASE_URL` existem no `.env` e estão preench
 - confirme se os logs de chat chegam em `get_recent_logs`;
 - verifique se o conteúdo da mensagem está chegando como `!top`;
 - revise se o usuário caiu no cooldown configurado.
+
+### `!p` ou `!t` não respondem
+
+- confirme se `ENABLE_TEST_COMMANDS=true` no `.env` carregado pelo processo;
+- confirme se `ADMINISTRADOR_ID` bate exatamente com o `player_id_1` do jogador nos logs do CRCON;
+- envie o comando depois do warm-up inicial do bot, pois o primeiro ciclo marca logs antigos como já vistos;
+- confira se o terminal registrou `[event] admin !p detected` ou `[event] admin !t detected`;
+- se aparecer `ignored because player is not allowed`, o ID configurado não corresponde ao emissor.
+
+### `!n` ou `!nodos` não enviam mensagens
+
+- confirme se o emissor é comandante do time ou é o `ADMINISTRADOR_ID`;
+- se for administrador, ele precisa aparecer em algum time no `get_team_view` para o bot saber qual time receberá os lembretes;
+- confirme se existem oficiais ou engenheiros no mesmo time;
+- revise o cooldown de `BOT_TOP_COMMAND_COOLDOWN_MS`, usado também para reduzir spam do comando de nodos;
+- confira se o terminal registrou `[nodos] !nodos validated`.
 
 ### O anúncio de fim de partida não saiu
 
