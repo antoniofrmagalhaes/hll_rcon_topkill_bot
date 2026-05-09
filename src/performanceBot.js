@@ -70,7 +70,7 @@ function readEnv() {
     sendPublic: String(process.env.PERFORMANCE_SEND_PUBLIC || "true").toLowerCase() !== "false",
     sendWinnerPrivate: String(process.env.PERFORMANCE_SEND_WINNER_PRIVATE || "true").toLowerCase() !== "false",
     grantVip: String(process.env.PERFORMANCE_GRANT_VIP || "true").toLowerCase() !== "false",
-    vipExpiration: process.env.PERFORMANCE_VIP_EXPIRATION || "1 day",
+    vipExpiration: process.env.PERFORMANCE_VIP_EXPIRATION || "3 days",
     ...adminCommandConfig,
     logInfo,
   };
@@ -199,7 +199,7 @@ function saveState() {
 }
 
 function isPerformanceCommand(log, cfg) {
-  return isAdminCommand(log, cfg, "!p");
+  return isAdminCommand(log, cfg, "!tp");
 }
 
 function commandKey(log) {
@@ -264,7 +264,7 @@ async function collectPerformance(client, cfg) {
   applyVipIds(result, currentVipIds);
   const summary = summarizePerformanceResult(result);
   const message = formatPerformanceMessage(result);
-  const privateWinnerMessages = formatPrivateWinnerMessages(result);
+  const privateWinnerMessages = formatPrivateWinnerMessages(result, cfg.vipExpiration);
 
   logInfo("[performance] result summary", summary);
   logInfo("[performance] message preview", { message });
@@ -304,6 +304,7 @@ async function getCurrentVipIds(client) {
 }
 
 function vipDescriptionFor(preview) {
+  if (preview.category === "role") return `VIP performance: meta ${preview.player?.roleLabel || "classe"}`;
   if (preview.category === "commander") return "VIP performance: melhor comandante";
   if (preview.category === "tank") return "VIP performance: melhor squad tanque";
   return "VIP performance: top jogadores da partida";
@@ -504,7 +505,7 @@ async function pollLogs(client, cfg) {
     remember(seenCommands, key);
 
     if (!isAdminActor(log, cfg)) {
-      logInfo("[event] admin !p ignored because player is not allowed", {
+      logInfo("[event] admin performance preview ignored because player is not allowed", {
         playerId: log.player_id_1 || null,
         playerName: log.player_name_1 || null,
         content: log.sub_content || null,
@@ -513,7 +514,7 @@ async function pollLogs(client, cfg) {
       continue;
     }
 
-    logInfo("[event] admin !p detected", {
+    logInfo("[event] admin performance preview detected", {
       playerId: log.player_id_1 || null,
       playerName: log.player_name_1 || null,
       content: log.sub_content || null,
