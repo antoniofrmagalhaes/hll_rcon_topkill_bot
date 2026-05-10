@@ -117,6 +117,7 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 - publica o resultado da performance no chat geral;
 - concede VIP de 3 dias com `add_vip` para jogadores sem VIP que bateram a meta da classe;
 - envia mensagem privada para cada vencedor premiado;
+- possui comandos administrativos privados para prévia, ajuda e métricas por classe;
 - consulta VIPs atuais para evitar acúmulo;
 - persiste estado próprio para não processar o mesmo `MATCH ENDED` duas vezes.
 
@@ -412,7 +413,7 @@ Quando o bot de performance encontra `MATCH ENDED`:
 - chama `add_vip` para vencedores sem VIP;
 - envia mensagem privada para cada vencedor premiado.
 
-Os comandos administrativos `!tp` e `!t` ficam desativados por padrão. Para testes locais, configure `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`; nesse modo, só o jogador com esse SteamID pode executar os comandos e todas as prévias são enviadas por mensagem privada para o próprio administrador.
+Os comandos administrativos ficam desativados por padrão. Para testes locais, configure `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`; nesse modo, só o jogador com esse SteamID pode executar os comandos e todas as prévias são enviadas por mensagem privada para o próprio administrador. Esses comandos não usam `message_all_players`, não enviam PM para os jogadores listados e não concedem VIP.
 
 Resumo dos comandos administrativos:
 
@@ -420,6 +421,8 @@ Resumo dos comandos administrativos:
 | --- | --- | --- | --- |
 | `!t` | Top Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
 | `!tp` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
+| `!classes` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
+| `!commander`, `!officer`, `!rifleman`/`!shooter`, `!assault`, `!automaticrifleman`, `!medic`, `!support`, `!machinegunner`, `!antitank`, `!engineer`, `!tankcommander`, `!crewman`, `!spotter`, `!sniper` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
 
 Resumo do comando de nodos:
 
@@ -453,13 +456,14 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `OP_BOT_ENABLED` | Não | `true` | Ativa o comando `!op` dentro do Top Bot. |
 | `PERFORMANCE_INFO_BOT_ENABLED` | Não | `true` | Ativa o bot informativo `!perf`/`!performance`. |
 | `PERFORMANCE_BOT_ENABLED` | Não | `false` | Ativa o bot de performance/VIP no runner. |
-| `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos de preview, como `!tp` e `!t`. |
+| `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos privados, como `!t`, `!tp`, `!classes` e métricas por classe. |
 | `ADMINISTRADOR_ID` | Para comandos administrativos | - | SteamID autorizado a executar comandos administrativos e receber as prévias por privado. Tambem pode acionar `!nodos` sem ser comandante, se estiver em um time. |
 | `PERFORMANCE_INFO_DRY_RUN` | Não | `false` | Não envia respostas reais do Performance Info Bot; apenas loga as ações. |
 | `PERFORMANCE_INFO_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOCK_FILE` | Não | `artifacts/performance-info-bot.lock` | Arquivo de lock do Performance Info Bot. |
 | `PERFORMANCE_INFO_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!perf`/`!performance`. |
+| `PERFORMANCE_PROCESS_MATCH_END` | Não | `true` | Processa `MATCH ENDED` real. Use `false` em teste local para permitir `!tp`, `!classes` e comandos por classe sem publicar nem premiar jogadores. |
 | `PERFORMANCE_SEND_PUBLIC` | Não | `true` | Envia anúncio público de performance no `MATCH ENDED`. |
 | `PERFORMANCE_SEND_WINNER_PRIVATE` | Não | `true` | Envia mensagem privada para vencedores premiados. |
 | `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |

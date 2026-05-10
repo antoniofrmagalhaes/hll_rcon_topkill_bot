@@ -14,8 +14,12 @@ const {
 const {
   applyVipIds,
   buildPerformanceResult,
+  formatClassesMessage,
   formatPerformanceMessage,
   formatPrivateWinnerMessages,
+  formatRoleMetricsMessage,
+  isClassesCommand,
+  resolveRoleMetricCommand,
   summarizePerformanceResult,
 } = require("./performance");
 
@@ -67,6 +71,7 @@ function readEnv() {
       process.env.PERFORMANCE_MATCH_ENDED_COOLDOWN_MS || process.env.BOT_MATCH_ENDED_COOLDOWN_MS || 300000
     ),
     statsEndpoint: process.env.PERFORMANCE_STATS_ENDPOINT || process.env.TOP_STATS_ENDPOINT || "get_live_game_stats",
+    processMatchEnd: String(process.env.PERFORMANCE_PROCESS_MATCH_END || "true").toLowerCase() !== "false",
     sendPublic: String(process.env.PERFORMANCE_SEND_PUBLIC || "true").toLowerCase() !== "false",
     sendWinnerPrivate: String(process.env.PERFORMANCE_SEND_WINNER_PRIVATE || "true").toLowerCase() !== "false",
     grantVip: String(process.env.PERFORMANCE_GRANT_VIP || "true").toLowerCase() !== "false",
@@ -199,7 +204,19 @@ function saveState() {
 }
 
 function isPerformanceCommand(log, cfg) {
-  return isAdminCommand(log, cfg, "!tp");
+  return isAdminCommand(log, cfg, "!tp") || isClassesAdminCommand(log, cfg) || isRoleMetricAdminCommand(log, cfg);
+}
+
+function isClassesAdminCommand(log, cfg) {
+  if (!cfg.enableTestCommands) return false;
+  if (!String(log?.action || "").startsWith("CHAT")) return false;
+  return isClassesCommand(log?.sub_content);
+}
+
+function isRoleMetricAdminCommand(log, cfg) {
+  if (!cfg.enableTestCommands) return false;
+  if (!String(log?.action || "").startsWith("CHAT")) return false;
+  return Boolean(resolveRoleMetricCommand(log?.sub_content));
 }
 
 function commandKey(log) {
@@ -400,6 +417,25 @@ async function sendPerformancePreviews(client, cfg, message, privateWinnerMessag
   }
 }
 
+async function sendRoleMetricsPreview(client, cfg, commandConfig, result) {
+  const message = formatRoleMetricsMessage(result, commandConfig);
+  await sendAdminPrivate(client, cfg, message, {
+    by: "hll-performance-bot-test",
+    previewType: `role-metrics-${commandConfig.command}`,
+    originalPlayerId: "role_metrics_preview",
+    originalPlayerName: commandConfig.title,
+  });
+}
+
+async function sendClassesPreview(client, cfg) {
+  await sendAdminPrivate(client, cfg, formatClassesMessage(), {
+    by: "hll-performance-bot-test",
+    previewType: "classes-help",
+    originalPlayerId: "classes_help",
+    originalPlayerName: "Classes",
+  });
+}
+
 async function sendWinnerPrivate(client, cfg, preview) {
   if (!cfg.sendWinnerPrivate) {
     logInfo("[performance] winner private send disabled", {
@@ -520,11 +556,27 @@ async function pollLogs(client, cfg) {
       content: log.sub_content || null,
     });
 
-    const { message, privateWinnerMessages } = await collectPerformance(client, cfg);
-    await sendPerformancePreviews(client, cfg, message, privateWinnerMessages);
+    if (isClassesCommand(log.sub_content)) {
+      await sendClassesPreview(client, cfg);
+      continue;
+    }
+
+    const roleMetricCommand = resolveRoleMetricCommand(log.sub_content);
+    const { result, message, privateWinnerMessages } = await collectPerformance(client, cfg);
+    if (roleMetricCommand) {
+      await sendRoleMetricsPreview(client, cfg, roleMetricCommand, result);
+    } else {
+      await sendPerformancePreviews(client, cfg, message, privateWinnerMessages);
+    }
   }
 
   if (!latestMatchEndedLog) return;
+  if (!cfg.processMatchEnd) {
+    logInfo("[event] MATCH ENDED ignored because PERFORMANCE_PROCESS_MATCH_END=false", {
+      raw: latestMatchEndedLog.raw || null,
+    });
+    return;
+  }
 
   const currentMatchEndKey = matchEndKey(latestMatchEndedLog);
   const nowMs = Date.now();
@@ -570,6 +622,7 @@ async function main() {
     stateFilePath,
     matchEndedCooldownMs: cfg.matchEndedCooldownMs,
     statsEndpoint: cfg.statsEndpoint,
+    processMatchEnd: cfg.processMatchEnd,
     sendPublic: cfg.sendPublic,
     sendWinnerPrivate: cfg.sendWinnerPrivate,
     grantVip: cfg.grantVip,
