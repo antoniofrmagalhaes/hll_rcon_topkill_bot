@@ -59,7 +59,7 @@ function readEnv() {
   }
 
   const adminCommandConfig = readAdminCommandConfig(process.env);
-  const minPlayersForVip = Number(process.env.PERFORMANCE_MIN_PLAYERS_FOR_VIP || 40);
+  const minPlayersForVip = Number(process.env.PERFORMANCE_MIN_PLAYERS_FOR_VIP || 41);
   if (!Number.isInteger(minPlayersForVip) || minPlayersForVip < 0) {
     throw new Error("PERFORMANCE_MIN_PLAYERS_FOR_VIP must be a non-negative integer");
   }
@@ -360,12 +360,15 @@ async function canAwardVipForPopulation(client, cfg) {
       return false;
     }
 
-    const allowed = playerCount.total >= cfg.minPlayersForVip;
+    const seedLimit = await getSeedVipPlayerLimit(client, cfg);
+    const allowed = playerCount.total >= seedLimit.minPlayersForVip;
     logInfo(`[vip] population gate ${allowed ? "allowed" : "blocked"}`, {
       allies: playerCount.allies,
       axis: playerCount.axis,
       playersCount: playerCount.total,
-      minPlayers: cfg.minPlayersForVip,
+      minPlayers: seedLimit.minPlayersForVip,
+      maxSeedPlayers: seedLimit.maxSeedPlayers,
+      seedLimitSource: seedLimit.source,
       source: playerCount.source,
     });
     return allowed;
@@ -376,6 +379,54 @@ async function canAwardVipForPopulation(client, cfg) {
     });
     return false;
   }
+}
+
+function extractSeedVipPlayerLimit(response) {
+  const requirements = response?.result?.requirements;
+  const maxAllies = numberFrom(requirements?.max_allies);
+  const maxAxis = numberFrom(requirements?.max_axis);
+  if (maxAllies === null || maxAxis === null) return null;
+
+  const maxSeedPlayers = maxAllies + maxAxis;
+  return {
+    maxAllies,
+    maxAxis,
+    maxSeedPlayers,
+    minPlayersForVip: maxSeedPlayers + 1,
+    source: "get_seed_vip_config",
+  };
+}
+
+async function getSeedVipPlayerLimit(client, cfg) {
+  try {
+    const seedVipConfigResponse = await client.get("get_seed_vip_config");
+    const limit = extractSeedVipPlayerLimit(seedVipConfigResponse);
+    if (limit) {
+      logInfo("[vip] seed VIP population limit loaded", limit);
+      return limit;
+    }
+
+    logInfo("[vip] seed VIP population limit missing, using fallback", {
+      endpoint: "get_seed_vip_config",
+      fallbackMinPlayers: cfg.minPlayersForVip,
+      resultKeys:
+        seedVipConfigResponse?.result && typeof seedVipConfigResponse.result === "object"
+          ? Object.keys(seedVipConfigResponse.result)
+          : [],
+    });
+  } catch (err) {
+    logInfo("[vip] seed VIP population limit failed, using fallback", {
+      endpoint: "get_seed_vip_config",
+      fallbackMinPlayers: cfg.minPlayersForVip,
+      error: err.message,
+    });
+  }
+
+  return {
+    maxSeedPlayers: Math.max(cfg.minPlayersForVip - 1, 0),
+    minPlayersForVip: cfg.minPlayersForVip,
+    source: "PERFORMANCE_MIN_PLAYERS_FOR_VIP",
+  };
 }
 
 async function collectPerformance(client, cfg) {
@@ -735,7 +786,7 @@ async function pollLogs(client, cfg) {
   if (!(await canAwardVipForPopulation(client, cfg))) {
     logInfo("[event] MATCH ENDED performance award skipped by population gate", {
       matchEndKey: currentMatchEndKey,
-      minPlayers: cfg.minPlayersForVip,
+      fallbackMinPlayers: cfg.minPlayersForVip,
     });
     return;
   }

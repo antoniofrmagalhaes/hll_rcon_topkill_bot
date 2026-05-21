@@ -420,7 +420,7 @@ Quando o Top Bot encontra `!n` ou `!nodos`:
 Quando o bot de performance encontra `MATCH ENDED`:
 
 - deduplica o evento por memória, cooldown e arquivo de estado;
-- consulta `get_gamestate` e só continua a premiação com jogadores suficientes para sair do seed;
+- consulta `get_seed_vip_config` e `get_gamestate` para só continuar a premiação fora do seed;
 - consulta `get_live_game_stats`, `get_team_view` e `get_vip_ids`;
 - calcula o score de cada jogador pela classe final em que terminou a partida;
 - premia quem bateu a meta configurada da própria classe;
@@ -483,7 +483,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `PERFORMANCE_SEND_WINNER_PRIVATE` | Não | `true` | Envia mensagem privada para vencedores premiados. |
 | `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |
 | `PERFORMANCE_VIP_EXPIRATION` | Não | `3 days` | Duracao relativa (`3 days`, `24 hours`, `90 minutes`) ou data ISO; o bot converte para timestamp absoluto antes do `add_vip`. |
-| `PERFORMANCE_MIN_PLAYERS_FOR_VIP` | Não | `40` | Minimo de jogadores retornados por `get_gamestate` para publicar e conceder VIP por performance no `MATCH ENDED`. |
+| `PERFORMANCE_MIN_PLAYERS_FOR_VIP` | Não | `41` | Fallback de minimo de jogadores para publicar e conceder VIP por performance se `get_seed_vip_config` nao retornar `requirements.max_allies` e `requirements.max_axis`. |
 | `PERFORMANCE_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Bot. |
 | `PERFORMANCE_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Bot. |
 | `PERFORMANCE_LOCK_FILE` | Não | `artifacts/performance-bot.lock` | Arquivo de lock do Performance Bot. |
