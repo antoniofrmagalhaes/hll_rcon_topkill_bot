@@ -9,6 +9,10 @@
     "bots": "node src/runBots.js",
     "performance": "node src/performanceBot.js",
     "performance:info": "node src/performanceInfoBot.js",
+    "service:start": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; sudo systemctl start \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
+    "service:restart": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; sudo systemctl restart \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
+    "service:refresh": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; git pull --ff-only && npm install && sudo systemctl restart \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager",
+    "service:stop": "SERVICE_NAME=\"${SERVICE_NAME:-hll-top-bot}\"; sudo systemctl stop \"$SERVICE_NAME\" && sudo systemctl status \"$SERVICE_NAME\" --no-pager || true",
     "stop": "node src/clear.js",
     "clear": "node src/clear.js"
   },

@@ -199,6 +199,9 @@ src/runBots.js
 ├── .env.example
 ├── .gitignore
 ├── README.md
+├── deploy
+│   ├── install-pm2.sh
+│   └── install-systemd.sh
 ├── docs
 │   ├── incidents
 │   │   └── 2026-05-07-performance-vip-expiration.md
@@ -298,6 +301,10 @@ npm install
 | `npm run bots` | Sobe o runner com todos os bots habilitados por ambiente. |
 | `npm run performance` | Sobe apenas o Performance Bot. |
 | `npm run performance:info` | Sobe apenas o Performance Info Bot. |
+| `npm run service:start` | Inicia o serviço `systemd` configurado em `SERVICE_NAME` ou `hll-top-bot`. |
+| `npm run service:restart` | Reinicia o serviço `systemd` configurado em `SERVICE_NAME` ou `hll-top-bot`. |
+| `npm run service:refresh` | Executa `git pull --ff-only`, instala dependências e reinicia o serviço. |
+| `npm run service:stop` | Para o serviço `systemd` configurado em `SERVICE_NAME` ou `hll-top-bot`. |
 | `npm run stop` | Encerra processos conhecidos e remove locks operacionais. |
 | `npm run clear` | Encerra processos conhecidos e remove locks operacionais. |
 
@@ -441,7 +448,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `RCON_API_TOKEN` | Sim | - | Token Bearer da API do CRCON. |
 | `RCON_BASE_URL` | Sim | - | Base URL do painel/instância CRCON. |
 | `PROD_SSH_ADDRESS` | Para deploy via SSH | - | Endereço SSH da VPS de produção, por exemplo `usuario@servidor`. |
-| `PROD_PROJECT_DIR` | Para deploy via SSH | `/opt/hll-bots` | Diretório do projeto na VPS de produção. |
+| `PROD_PROJECT_DIR` | Para deploy via SSH | `/root/hll_rcon_topkill_bot` | Diretório do projeto na VPS de produção. |
 | `BOT_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Top Bot. |
 | `BOT_LOG_WINDOW` | Não | `120` | Janela de logs recentes consultados por ciclo no Top Bot. |
 | `BOT_LOCK_FILE` | Não | `artifacts/bot.lock` | Arquivo usado para lock do Top Bot. |
@@ -499,7 +506,21 @@ pm2 start npm --name hll-bots -- run bots
 pm2 save
 ```
 
+Ou use o instalador:
+
+```bash
+./deploy/install-pm2.sh
+```
+
 #### Exemplo de unit com systemd
+
+O instalador abaixo cria ou atualiza a unit usando `npm run bots` por padrão:
+
+```bash
+./deploy/install-systemd.sh
+```
+
+Exemplo da unit gerada:
 
 ```ini
 [Unit]
@@ -508,11 +529,13 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/hll-bots
+WorkingDirectory=/root/hll_rcon_topkill_bot
 ExecStart=/usr/bin/npm run bots
 Restart=always
-User=www-data
+RestartSec=5
+User=root
 Environment=NODE_ENV=production
+EnvironmentFile=/root/hll_rcon_topkill_bot/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -536,7 +559,7 @@ Se o bot roda manualmente, sem supervisor:
 
 ```bash
 ssh "$PROD_SSH_ADDRESS"
-cd /opt/hll-bots
+cd /root/hll_rcon_topkill_bot
 git status --short
 npm run stop
 git pull --ff-only
@@ -547,13 +570,13 @@ node --check src/performanceInfoBot.js
 npm run bots
 ```
 
-Se `PROD_PROJECT_DIR` no `.env` for diferente de `/opt/hll-bots`, use esse caminho no `cd`.
+Se `PROD_PROJECT_DIR` no `.env` for diferente de `/root/hll_rcon_topkill_bot`, use esse caminho no `cd`.
 
 Se a produção estiver sob PM2:
 
 ```bash
 ssh "$PROD_SSH_ADDRESS"
-cd /opt/hll-bots
+cd /root/hll_rcon_topkill_bot
 pm2 stop hll-bots
 git status --short
 git pull --ff-only
@@ -569,16 +592,16 @@ Se a produção estiver sob `systemd`:
 
 ```bash
 ssh "$PROD_SSH_ADDRESS"
-cd /opt/hll-bots
-sudo systemctl stop hll-bots
+cd /root/hll_rcon_topkill_bot
+sudo systemctl stop hll-top-bot
 git status --short
 git pull --ff-only
 npm ci
 node --check src/bot.js
 node --check src/performanceBot.js
 node --check src/performanceInfoBot.js
-sudo systemctl restart hll-bots
-sudo journalctl -u hll-bots -n 80 --no-pager
+sudo systemctl restart hll-top-bot
+sudo journalctl -u hll-top-bot -n 80 --no-pager
 ```
 
 Checklist antes de considerar o deploy concluído:
@@ -597,18 +620,18 @@ set -a
 source .env
 set +a
 ssh "$PROD_SSH_ADDRESS"
-cd /opt/hll-bots
+cd /root/hll_rcon_topkill_bot
 npm run stop
 ```
 
 O comando `npm run stop` executa `src/clear.js`: ele envia `SIGTERM` para processos dos bots, força `SIGKILL` se algum processo não encerrar e remove os locks em `artifacts/`.
 
-Se `PROD_PROJECT_DIR` no `.env` for diferente de `/opt/hll-bots`, use esse caminho no `cd`.
+Se `PROD_PROJECT_DIR` no `.env` for diferente de `/root/hll_rcon_topkill_bot`, use esse caminho no `cd`.
 
 Para rodar em uma linha a partir da sua máquina local:
 
 ```bash
-set -a; source .env; set +a; ssh "$PROD_SSH_ADDRESS" "cd ${PROD_PROJECT_DIR:-/opt/hll-bots} && npm run stop"
+set -a; source .env; set +a; ssh "$PROD_SSH_ADDRESS" "cd ${PROD_PROJECT_DIR:-/root/hll_rcon_topkill_bot} && npm run stop"
 ```
 
 ## Operação e Manutenção
