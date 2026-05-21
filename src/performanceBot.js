@@ -59,6 +59,10 @@ function readEnv() {
   }
 
   const adminCommandConfig = readAdminCommandConfig(process.env);
+  const minPlayersForVip = Number(process.env.PERFORMANCE_MIN_PLAYERS_FOR_VIP || 40);
+  if (!Number.isInteger(minPlayersForVip) || minPlayersForVip < 0) {
+    throw new Error("PERFORMANCE_MIN_PLAYERS_FOR_VIP must be a non-negative integer");
+  }
 
   return {
     baseUrl: process.env.RCON_BASE_URL.replace(/\/$/, ""),
@@ -76,6 +80,7 @@ function readEnv() {
     sendWinnerPrivate: String(process.env.PERFORMANCE_SEND_WINNER_PRIVATE || "true").toLowerCase() !== "false",
     grantVip: String(process.env.PERFORMANCE_GRANT_VIP || "true").toLowerCase() !== "false",
     vipExpiration: process.env.PERFORMANCE_VIP_EXPIRATION || "3 days",
+    minPlayersForVip,
     ...adminCommandConfig,
     logInfo,
   };
@@ -249,6 +254,128 @@ function summarizeScoreboardResponse(resp) {
     statsCount: stats.length,
     samplePlayerKeys: first && typeof first === "object" ? Object.keys(first).slice(0, 30) : [],
   };
+}
+
+function numberFrom(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function readGamestateTeamCount(result, teamNames) {
+  const containers = [
+    result?.players,
+    result?.player_count,
+    result?.player_counts,
+    result?.players_count,
+    result,
+  ];
+
+  for (const container of containers) {
+    if (!container || typeof container !== "object") continue;
+
+    for (const teamName of teamNames) {
+      const candidates = [
+        container[teamName],
+        container[`num_${teamName}_players`],
+        container[`${teamName}_players`],
+        container[`${teamName}_player_count`],
+        container[`${teamName}_players_count`],
+      ];
+
+      for (const candidate of candidates) {
+        const count = numberFrom(candidate);
+        if (count !== null) return count;
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseGamestatePlayersLine(value) {
+  const text = typeof value === "string" ? value : "";
+  const match = text.match(/players\s*:\s*all(?:ied|ies)\s*:\s*(\d+)\s*-\s*axis\s*:\s*(\d+)/i);
+  if (!match) return null;
+
+  return {
+    allies: Number(match[1]),
+    axis: Number(match[2]),
+    source: "players-line",
+  };
+}
+
+function gamestateTextCandidates(result) {
+  if (typeof result === "string") return [result];
+  if (!result || typeof result !== "object") return [];
+
+  return [
+    result.raw,
+    result.gamestate,
+    result.game_state,
+    result.message,
+    result.text,
+  ].filter((value) => typeof value === "string");
+}
+
+function extractGamestatePlayerCount(response) {
+  const result = response?.result ?? response;
+  const allies = readGamestateTeamCount(result, ["allied", "allies"]);
+  const axis = readGamestateTeamCount(result, ["axis"]);
+
+  if (allies !== null && axis !== null) {
+    return {
+      allies,
+      axis,
+      total: allies + axis,
+      source: "structured",
+    };
+  }
+
+  for (const candidate of gamestateTextCandidates(result)) {
+    const counts = parseGamestatePlayersLine(candidate);
+    if (counts) {
+      return {
+        ...counts,
+        total: counts.allies + counts.axis,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function canAwardVipForPopulation(client, cfg) {
+  try {
+    const gamestateResponse = await client.get("get_gamestate");
+    const playerCount = extractGamestatePlayerCount(gamestateResponse);
+    if (!playerCount) {
+      logInfo("[vip] population gate failed closed", {
+        endpoint: "get_gamestate",
+        error: "player count missing from response",
+        resultKeys:
+          gamestateResponse?.result && typeof gamestateResponse.result === "object"
+            ? Object.keys(gamestateResponse.result)
+            : [],
+      });
+      return false;
+    }
+
+    const allowed = playerCount.total >= cfg.minPlayersForVip;
+    logInfo(`[vip] population gate ${allowed ? "allowed" : "blocked"}`, {
+      allies: playerCount.allies,
+      axis: playerCount.axis,
+      playersCount: playerCount.total,
+      minPlayers: cfg.minPlayersForVip,
+      source: playerCount.source,
+    });
+    return allowed;
+  } catch (err) {
+    logInfo("[vip] population gate failed closed", {
+      endpoint: "get_gamestate",
+      error: err.message,
+    });
+    return false;
+  }
 }
 
 async function collectPerformance(client, cfg) {
@@ -604,6 +731,15 @@ async function pollLogs(client, cfg) {
   state.lastMatchEndKey = currentMatchEndKey;
   state.lastMatchEndedAtMs = nowMs;
   saveState();
+
+  if (!(await canAwardVipForPopulation(client, cfg))) {
+    logInfo("[event] MATCH ENDED performance award skipped by population gate", {
+      matchEndKey: currentMatchEndKey,
+      minPlayers: cfg.minPlayersForVip,
+    });
+    return;
+  }
+
   const { message, privateWinnerMessages } = await collectPerformance(client, cfg);
   await publishPerformanceProduction(client, cfg, message, privateWinnerMessages);
 }
@@ -627,6 +763,7 @@ async function main() {
     sendWinnerPrivate: cfg.sendWinnerPrivate,
     grantVip: cfg.grantVip,
     vipExpiration: cfg.vipExpiration,
+    minPlayersForVip: cfg.minPlayersForVip,
     enableTestCommands: cfg.enableTestCommands,
     adminId: cfg.adminId,
     lastMatchEndKey: state.lastMatchEndKey,
