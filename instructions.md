@@ -1,3 +1,8 @@
+Nota operacional:
+- Este arquivo preserva um briefing historico da fase inicial de discovery da API.
+- `discovery` abaixo significa exploracao da API CRCON, nao uma branch Git.
+- Desde `2026-05-21`, `main` e a branch unica para desenvolvimento, deploy e producao.
+
 Segue um prompt pronto para colar no Codex:
 
 ````md

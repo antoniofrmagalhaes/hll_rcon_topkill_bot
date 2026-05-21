@@ -204,6 +204,7 @@ src/runBots.js
 │   └── install-systemd.sh
 ├── docs
 │   ├── incidents
+│   │   ├── 2026-05-21-main-discovery-branch-consolidation.md
 │   │   └── 2026-05-07-performance-vip-expiration.md
 │   └── plans
 │       └── top-performance-vip-bots.md
@@ -253,6 +254,12 @@ src/runBots.js
 
 - `docs/incidents/`: registros de incidentes, correções manuais e auditorias de produção.
 - `docs/plans/`: planos de implementação e decisões de produto/arquitetura.
+
+### Branch operacional
+
+- `main` é a branch única para desenvolvimento, deploy e produção.
+- A antiga branch Git `discovery` foi consolidada em `main` em `2026-05-21` e removida depois da migração da VPS.
+- Neste repositório, o termo `discovery` que ainda aparece em scripts e documentos se refere à inspeção da API do CRCON, não a uma branch Git.
 
 ## Requisitos
 
@@ -484,6 +491,8 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 
 ## Deploy em VPS
 
+Produção deve fazer checkout de `main`. Antes de reiniciar o serviço, confirme que a VPS está em `main` e que o `pull` é fast-forward.
+
 ### Fluxo mínimo
 
 ```bash
@@ -560,9 +569,10 @@ Se o bot roda manualmente, sem supervisor:
 ```bash
 ssh "$PROD_SSH_ADDRESS"
 cd /root/hll_rcon_topkill_bot
+git branch --show-current
 git status --short
 npm run stop
-git pull --ff-only
+git pull --ff-only origin main
 npm ci
 node --check src/bot.js
 node --check src/performanceBot.js
@@ -578,8 +588,9 @@ Se a produção estiver sob PM2:
 ssh "$PROD_SSH_ADDRESS"
 cd /root/hll_rcon_topkill_bot
 pm2 stop hll-bots
+git branch --show-current
 git status --short
-git pull --ff-only
+git pull --ff-only origin main
 npm ci
 node --check src/bot.js
 node --check src/performanceBot.js
@@ -594,8 +605,9 @@ Se a produção estiver sob `systemd`:
 ssh "$PROD_SSH_ADDRESS"
 cd /root/hll_rcon_topkill_bot
 sudo systemctl stop hll-top-bot
+git branch --show-current
 git status --short
-git pull --ff-only
+git pull --ff-only origin main
 npm ci
 node --check src/bot.js
 node --check src/performanceBot.js
@@ -606,6 +618,7 @@ sudo journalctl -u hll-top-bot -n 80 --no-pager
 
 Checklist antes de considerar o deploy concluído:
 
+- `git branch --show-current` retorna `main`;
 - `git status --short` não mostra alterações inesperadas na VPS;
 - não existe erro de lock em `artifacts/*.lock`;
 - logs mostram os bots iniciando uma única vez;
