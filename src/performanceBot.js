@@ -79,7 +79,7 @@ function readEnv() {
     sendPublic: String(process.env.PERFORMANCE_SEND_PUBLIC || "true").toLowerCase() !== "false",
     sendWinnerPrivate: String(process.env.PERFORMANCE_SEND_WINNER_PRIVATE || "true").toLowerCase() !== "false",
     grantVip: String(process.env.PERFORMANCE_GRANT_VIP || "true").toLowerCase() !== "false",
-    vipExpiration: process.env.PERFORMANCE_VIP_EXPIRATION || "3 days",
+    vipExpiration: process.env.PERFORMANCE_VIP_EXPIRATION || "1 day",
     minPlayersForVip,
     ...adminCommandConfig,
     logInfo,

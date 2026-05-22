@@ -41,7 +41,7 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 - envia o ranking de abates em mensagem privada para quem acionou o comando;
 - envia lembrete privado de OP para o oficial do squad quando o comando `!op` passa nas regras de tag;
 - detecta `MATCH ENDED` e publica automaticamente o top da partida;
-- detecta `MATCH ENDED` no bot de performance, publica quem bateu a meta da classe final e concede VIP de 3 dias;
+- detecta `MATCH ENDED` no bot de performance, publica quem bateu a meta da classe final e concede VIP de 1 dia;
 - evita duplicações com cooldown, memória de eventos e persistência de estado.
 
 <table>
@@ -115,7 +115,7 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 
 - calcula a performance por classe final usando abates, combate, ataque, defesa e suporte;
 - publica o resultado da performance no chat geral;
-- concede VIP de 3 dias com `add_vip` para jogadores sem VIP que bateram a meta da classe;
+- concede VIP de 1 dia com `add_vip` para jogadores sem VIP que bateram a meta da classe;
 - envia mensagem privada para cada vencedor premiado;
 - possui comandos administrativos privados para prévia, ajuda e métricas por classe;
 - consulta VIPs atuais para evitar acúmulo;
@@ -482,7 +482,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `PERFORMANCE_SEND_PUBLIC` | Não | `true` | Envia anúncio público de performance no `MATCH ENDED`. |
 | `PERFORMANCE_SEND_WINNER_PRIVATE` | Não | `true` | Envia mensagem privada para vencedores premiados. |
 | `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |
-| `PERFORMANCE_VIP_EXPIRATION` | Não | `3 days` | Duracao relativa (`3 days`, `24 hours`, `90 minutes`) ou data ISO; o bot converte para timestamp absoluto antes do `add_vip`. |
+| `PERFORMANCE_VIP_EXPIRATION` | Não | `1 day` | Duracao relativa (`1 day`, `24 hours`, `90 minutes`) ou data ISO; o bot converte para timestamp absoluto antes do `add_vip`. |
 | `PERFORMANCE_MIN_PLAYERS_FOR_VIP` | Não | `41` | Fallback de minimo de jogadores para publicar e conceder VIP por performance se `get_seed_vip_config` nao retornar `requirements.max_allies` e `requirements.max_axis`. |
 | `PERFORMANCE_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Bot. |
 | `PERFORMANCE_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Bot. |

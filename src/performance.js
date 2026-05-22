@@ -352,10 +352,10 @@ function isKnownVip(player, vipLookup) {
 }
 
 function vipStatus(player) {
-  return player?.isVip ? "ja tem VIP" : "VIP 3 dias";
+  return player?.isVip ? "ja tem VIP" : "VIP 1 dia";
 }
 
-function formatVipExpiration(date = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)) {
+function formatVipExpiration(date = new Date(Date.now() + 24 * 60 * 60 * 1000)) {
   const parts = new Intl.DateTimeFormat("pt-BR", {
     timeZone: process.env.TZ || "America/Campo_Grande",
     day: "2-digit",
@@ -390,7 +390,7 @@ function estimateVipExpirationDate(value, now = new Date()) {
     return parsed;
   }
 
-  return new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  return new Date(now.getTime() + 24 * 60 * 60 * 1000);
 }
 
 function formatScoreFormulaLines(parts) {
@@ -860,7 +860,7 @@ function formatClassesMessage() {
   ].join("\n");
 }
 
-function formatPrivateWinnerMessages(result, vipExpirationValue = "3 days") {
+function formatPrivateWinnerMessages(result, vipExpirationValue = "1 day") {
   const messages = [];
   const awardedPlayerIds = new Set();
   const vipUntil = formatVipExpiration(estimateVipExpirationDate(vipExpirationValue));

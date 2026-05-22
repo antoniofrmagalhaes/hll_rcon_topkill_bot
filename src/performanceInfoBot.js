@@ -183,7 +183,7 @@ function formatPerformanceInfoMessage() {
     "Tanque e Recon:",
     "combate, objetivo e suporte conforme funcao",
     "",
-    "Premiacao: 3 dias de VIP nao acumulativo.",
+    "Premiacao: 1 dia de VIP nao acumulativo.",
   ].join("\n");
 }
 
