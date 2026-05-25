@@ -6,6 +6,7 @@ const path = require("path");
 const { readEnv } = require("./config");
 const { RconClient } = require("./rconClient");
 const { normalizePlayers, computeTopKillers, formatTopMessage } = require("./top");
+const { translateRolePtBr } = require("./roles");
 const { adminCommandKey, isAdminActor, isAdminCommand } = require("./adminCommands");
 const { handleNodosCommand, isNodosCommand, nodosCommandKey } = require("./nodos");
 const { handleOpCommand, isOpCommand, opCommandKey } = require("./op");
@@ -438,6 +439,11 @@ function summarizePlayers(players) {
   };
 }
 
+function numberValue(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
 function summarizeCommanders(teamViewResponse) {
   const result = teamViewResponse?.result || {};
   const teams = ["allies", "axis"];
@@ -518,7 +524,12 @@ function summarizeBestSquads(teamViewResponse) {
           members: Array.isArray(squad?.players)
             ? squad.players.map((player) => ({
                 name: player?.name || null,
-                role: player?.role || null,
+                role: translateRolePtBr(player?.role),
+                points:
+                  numberValue(player?.combat) +
+                  numberValue(player?.offense) +
+                  numberValue(player?.defense) +
+                  numberValue(player?.support),
               }))
             : [],
         };
@@ -718,6 +729,17 @@ async function pollLogs(client, cfg) {
     if (isTopCommand(log)) {
       const commandKey = topCommandKey(log);
       if (seenTopCommands.has(commandKey)) continue;
+      if (cfg.topCommandAdminOnly && !isAdminActor(log, cfg)) {
+        remember(seenTopCommands, commandKey);
+        remember(seenChatEvents, key);
+        logInfo("[event] !top ignored because TOP_COMMAND_ADMIN_ONLY is enabled", {
+          playerId: log.player_id_1 || null,
+          playerName: log.player_name_1 || null,
+          content: log.sub_content || null,
+          adminId: cfg.adminId,
+        });
+        continue;
+      }
       if (shouldSkipTopCommandByCooldown(log, cfg)) {
         logInfo("[event] !top skipped by cooldown", {
           playerId: log.player_id_1 || null,
@@ -857,6 +879,7 @@ async function main() {
     logWindow: cfg.logWindow,
     lockFilePath,
     topLimit: cfg.topLimit,
+    topCommandAdminOnly: cfg.topCommandAdminOnly,
     topStatsEndpoint: cfg.topStatsEndpoint,
     dryRun: cfg.dryRun,
     opBotEnabled: cfg.opBotEnabled,

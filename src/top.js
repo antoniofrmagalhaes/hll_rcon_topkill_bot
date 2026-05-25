@@ -36,6 +36,29 @@ function formatSquadName(name) {
   return String(name || "").trim().toUpperCase();
 }
 
+function formatSquadMembers(members) {
+  if (!Array.isArray(members) || !members.length) return ["Sem membros"];
+
+  const sortedMembers = [...members].sort((a, b) => {
+    const pointsA = Number(a.points || 0);
+    const pointsB = Number(b.points || 0);
+    if (pointsB !== pointsA) return pointsB - pointsA;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+  const positionWidth = String(sortedMembers.length).length;
+  const pointsWidth = sortedMembers.reduce((width, member) => {
+    return Math.max(width, String(Math.round(Number(member.points || 0))).length);
+  }, 1);
+
+  return sortedMembers.map((member, idx) => {
+    const position = String(idx + 1).padStart(positionWidth, " ");
+    const points = String(Math.round(Number(member.points || 0))).padStart(pointsWidth, " ");
+    const name = member.name || "Unknown";
+    const role = member.role || "Classe desconhecida";
+    return `${position} ${points} pts ${name} (${role})`;
+  });
+}
+
 function formatTopMessage(
   topPlayers,
   {
@@ -67,9 +90,7 @@ function formatTopMessage(
       return ["", title, "", "Sem dados"];
     }
 
-    const members = squad.members.length
-      ? squad.members.map((member) => `- ${member.name} (${member.role})`)
-      : ["Sem membros"];
+    const members = formatSquadMembers(squad.members);
 
     return [
       "",
@@ -89,4 +110,4 @@ function formatTopMessage(
   return `TOP 10 Abates\n\n${body}`;
 }
 
-module.exports = { normalizePlayers, computeTopKillers, formatTopMessage };
+module.exports = { normalizePlayers, computeTopKillers, formatTopMessage, formatSquadMembers };

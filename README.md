@@ -464,6 +464,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `BOT_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown para evitar republicações de `MATCH ENDED` pelo Top Bot. |
 | `TOP_LIMIT` | Não | `10` | Quantidade de jogadores exibidos no ranking. |
 | `TOP_INCLUDE_HEADER` | Não | `true` | Adiciona ou remove cabeçalho da mensagem formatada. |
+| `TOP_COMMAND_ADMIN_ONLY` | Não | `false` | Quando `true`, o Top Bot só processa `!top` enviado pelo `ADMINISTRADOR_ID`. Útil para rodar bot local no servidor real sem responder a comandos de outros jogadores. |
 | `TOP_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário para coletar dados do ranking. |
 | `BOT_DRY_RUN` | Não | `false` | Não envia mensagens reais; apenas loga as ações. |
 | `BOT_STATE_FILE` | Não | `artifacts/bot-state.json` | Persistência de estado para deduplicação entre restarts. |
