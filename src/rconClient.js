@@ -4,22 +4,29 @@ class RconClient {
     this.token = token;
   }
 
-  async get(endpoint) {
-    return this.request(endpoint, "GET");
+  async get(endpoint, query = null) {
+    return this.request(endpoint, "GET", null, query);
   }
 
   async post(endpoint, body = {}) {
     return this.request(endpoint, "POST", body);
   }
 
-  async request(endpoint, method, body) {
-    const url = `${this.baseUrl}/api/${endpoint}`;
+  async request(endpoint, method, body, query = null) {
+    const url = new URL(`${this.baseUrl}/api/${endpoint}`);
+    if (query && typeof query === "object") {
+      for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null) continue;
+        url.searchParams.set(key, String(value));
+      }
+    }
+
     const headers = {
       Authorization: `Bearer ${this.token}`,
       "Content-Type": "application/json",
     };
 
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method,
       headers,
       body: method === "POST" ? JSON.stringify(body) : undefined,

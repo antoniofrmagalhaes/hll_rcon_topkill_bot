@@ -18,6 +18,9 @@ const seenOpCommands = new Set();
 const topCommandCooldownByActor = new Map();
 const seenMatchEndEvents = new Set();
 let logsWarmedUp = false;
+const MATCH_END_TOLERANCE_SECONDS = 15 * 60;
+const LOG_PADDING_SECONDS = 120;
+const LOG_LIMIT = 500;
 const stateFilePath = process.env.BOT_STATE_FILE || path.resolve(__dirname, "..", "artifacts", "bot-state.json");
 let lockFilePath = null;
 let lockFd = null;
@@ -98,6 +101,193 @@ function matchEndKey(log) {
     return `match-ended|${Math.floor(ts / 1000)}`;
   }
   return "match-ended|unknown";
+}
+
+function logTimestampMs(log) {
+  const timestampMs = Number(log?.timestamp_ms || 0);
+  if (Number.isFinite(timestampMs) && timestampMs > 0) return timestampMs;
+  return Date.now();
+}
+
+function pickBestMatch(matches, endedAtSeconds) {
+  const candidates = (Array.isArray(matches) ? matches : [])
+    .filter((entry) => Number.isFinite(Number(entry?.end)) && Number.isFinite(Number(entry?.start)))
+    .map((entry) => ({
+      entry,
+      diff: Math.abs(Number(entry.end) - endedAtSeconds),
+    }))
+    .sort((a, b) => a.diff - b.diff);
+
+  const best = candidates[0];
+  if (!best || best.diff > MATCH_END_TOLERANCE_SECONDS) {
+    throw new Error(
+      `Nenhuma partida encontrada em get_map_history para MATCH ENDED; nearestSecondsDiff=${best?.diff ?? "none"}`
+    );
+  }
+
+  return best.entry;
+}
+
+function capturePlayerName(namesById, playerId, playerName) {
+  if (!playerId || !playerName || namesById.has(playerId)) return;
+  namesById.set(playerId, playerName);
+}
+
+function captureTeamsFromRaw(raw, teamsById, namesById) {
+  const regex = /([^()[\]]+?)\((Allies|Axis|None)\/([a-zA-Z0-9]+)\)/g;
+
+  for (const match of raw.matchAll(regex)) {
+    const [, rawName, team, playerId] = match;
+    const name = rawName.trim();
+
+    if (!teamsById.has(playerId)) {
+      teamsById.set(playerId, new Set());
+    }
+
+    teamsById.get(playerId)?.add(team);
+
+    if (name && !namesById.has(playerId)) {
+      namesById.set(playerId, name);
+    }
+  }
+}
+
+function captureSwitchFromRaw(raw, switchNames) {
+  const match = raw.match(/TEAMSWITCH\s+(.+?)\s+\((None|Allies|Axis)\s+>\s+(None|Allies|Axis)\)/);
+  if (!match) return;
+  switchNames.add(match[1].trim());
+}
+
+function captureKillsAndDeaths(log, killsById, deathsById) {
+  if (!log.type || (log.type !== "KILL" && log.type !== "TEAM KILL")) return;
+
+  if (log.player1_id) {
+    killsById.set(log.player1_id, (killsById.get(log.player1_id) || 0) + 1);
+  }
+
+  if (log.player2_id) {
+    deathsById.set(log.player2_id, (deathsById.get(log.player2_id) || 0) + 1);
+  }
+}
+
+function buildSnapshotPlayers(match, logs) {
+  const playerStats = match.player_stats || {};
+  const namesById = new Map();
+  const teamsById = new Map();
+  const switchNames = new Set();
+  const killsById = new Map();
+  const deathsById = new Map();
+
+  for (const log of logs) {
+    capturePlayerName(namesById, log.player1_id, log.player1_name);
+    capturePlayerName(namesById, log.player2_id, log.player2_name);
+    captureKillsAndDeaths(log, killsById, deathsById);
+
+    if (log.raw) {
+      captureTeamsFromRaw(log.raw, teamsById, namesById);
+      captureSwitchFromRaw(log.raw, switchNames);
+    }
+  }
+
+  return Object.entries(playerStats).map(([playerId, stats]) => {
+    const detectedTeams = Array.from(teamsById.get(playerId) || []);
+    const name = namesById.get(playerId) || null;
+
+    return {
+      externalPlayerId: playerId,
+      name,
+      stats: {
+        ...stats,
+        kills: killsById.get(playerId) || 0,
+        deaths: deathsById.get(playerId) || 0,
+      },
+      detectedTeams,
+      teamSwitched: detectedTeams.length > 1 || (name ? switchNames.has(name) : false),
+    };
+  });
+}
+
+function buildSnapshotMatchKey(log, match) {
+  const normalizedMap = String(match.name || "unknown-map")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const serverId = String(log?.server || log?.server_id || "unknown-server").trim() || "unknown-server";
+
+  return [serverId, normalizedMap || "unknown-map", String(match.end || "unknown-end")].join(":");
+}
+
+async function collectMatchSnapshot(client, log) {
+  const endedAtSeconds = Math.floor(logTimestampMs(log) / 1000);
+  const mapHistoryResponse = await client.get("get_map_history");
+  const match = pickBestMatch(mapHistoryResponse?.result || [], endedAtSeconds);
+  const fromSeconds = Number(match.start) - LOG_PADDING_SECONDS;
+  const tillSeconds = Number(match.end) + LOG_PADDING_SECONDS;
+  const logsResponse = await client.get("get_historical_logs", {
+    from_: new Date(fromSeconds * 1000).toISOString(),
+    till: new Date(tillSeconds * 1000).toISOString(),
+    limit: LOG_LIMIT,
+  });
+  const logs = Array.isArray(logsResponse?.result) ? logsResponse.result : [];
+
+  return {
+    matchKey: buildSnapshotMatchKey(log, match),
+    sourceEventId: matchEndKey(log),
+    endedAt: new Date(Number(match.end) * 1000).toISOString(),
+    startedAt: new Date(Number(match.start) * 1000).toISOString(),
+    map: match.name || null,
+    serverId: String(log?.server || log?.server_id || "").trim() || null,
+    collectionWindow: {
+      start: new Date(fromSeconds * 1000).toISOString(),
+      end: new Date(tillSeconds * 1000).toISOString(),
+    },
+    resolver: {
+      strategy: "bot:get_map_history+get_historical_logs",
+      matchedBy: "match-ended-log",
+      matchedBySecondsDiff: Math.abs(Number(match.end) - endedAtSeconds),
+      toleranceSeconds: MATCH_END_TOLERANCE_SECONDS,
+    },
+    raw: {
+      match,
+      logs,
+    },
+    players: buildSnapshotPlayers(match, logs),
+  };
+}
+
+async function sendRankingSnapshot(client, cfg, log) {
+  if (!cfg.rankingSnapshotEnabled) return;
+
+  if (!cfg.rankingSnapshotEndpoint || !cfg.rankingIngestionToken) {
+    logInfo("[ranking] snapshot not sent: endpoint/token not configured");
+    return;
+  }
+
+  const snapshot = await collectMatchSnapshot(client, log);
+  const body = {
+    eventId: matchEndKey(log),
+    sourceKey: `bot:${snapshot.matchKey}`,
+    receivedFrom: "hll-bot",
+    snapshot,
+  };
+
+  const response = await fetch(cfg.rankingSnapshotEndpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.rankingIngestionToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`[ranking] snapshot POST failed (${response.status}): ${text}`);
+  }
+
+  const result = await response.json();
+  logInfo("[ranking] snapshot queued", result);
 }
 
 function readLockFile() {
@@ -648,6 +838,7 @@ async function pollLogs(client, cfg) {
     matchEndKey: currentMatchEndKey,
     cooldownMs: cfg.matchEndedCooldownMs,
   });
+  await sendRankingSnapshot(client, cfg, latestMatchEndedLog);
   await broadcastTop(client, cfg, "fim da partida");
   state.lastMatchEndKey = currentMatchEndKey;
   state.lastMatchEndedAtMs = nowMs;
@@ -669,6 +860,8 @@ async function main() {
     topStatsEndpoint: cfg.topStatsEndpoint,
     dryRun: cfg.dryRun,
     opBotEnabled: cfg.opBotEnabled,
+    rankingSnapshotEnabled: cfg.rankingSnapshotEnabled,
+    rankingSnapshotEndpointConfigured: Boolean(cfg.rankingSnapshotEndpoint),
     enableTestCommands: cfg.enableTestCommands,
     adminId: cfg.adminId,
     topCommandCooldownMs: cfg.topCommandCooldownMs,
