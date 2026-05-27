@@ -457,7 +457,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `RCON_BASE_URL` | Sim | - | Base URL do painel/instância CRCON. |
 | `PROD_SSH_ADDRESS` | Para deploy via SSH | - | Endereço SSH da VPS de produção, por exemplo `usuario@servidor`. |
 | `PROD_PROJECT_DIR` | Para deploy via SSH | `/root/hll_rcon_topkill_bot` | Diretório do projeto na VPS de produção. |
-| `BOT_POLL_INTERVAL_MS` | Não | `1000` | Intervalo do polling de logs do Top Bot. |
+| `BOT_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Top Bot. |
 | `BOT_LOG_WINDOW` | Não | `120` | Janela de logs recentes consultados por ciclo no Top Bot. |
 | `BOT_LOCK_FILE` | Não | `artifacts/bot.lock` | Arquivo usado para lock do Top Bot. |
 | `BOT_TOP_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!top`. |
@@ -475,7 +475,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos privados, como `!t`, `!tp`, `!classes` e métricas por classe. |
 | `ADMINISTRADOR_ID` | Para comandos administrativos | - | SteamID autorizado a executar comandos administrativos e receber as prévias por privado. Tambem pode acionar `!nodos` sem ser comandante, se estiver em um time. |
 | `PERFORMANCE_INFO_DRY_RUN` | Não | `false` | Não envia respostas reais do Performance Info Bot; apenas loga as ações. |
-| `PERFORMANCE_INFO_POLL_INTERVAL_MS` | Não | `1000` | Intervalo do polling de logs do Performance Info Bot. |
+| `PERFORMANCE_INFO_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOCK_FILE` | Não | `artifacts/performance-info-bot.lock` | Arquivo de lock do Performance Info Bot. |
 | `PERFORMANCE_INFO_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!perf`/`!performance`. |
@@ -485,7 +485,7 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |
 | `PERFORMANCE_VIP_EXPIRATION` | Não | `1 day` | Duracao relativa (`1 day`, `24 hours`, `90 minutes`) ou data ISO; o bot converte para timestamp absoluto antes do `add_vip`. |
 | `PERFORMANCE_MIN_PLAYERS_FOR_VIP` | Não | `41` | Fallback de minimo de jogadores para publicar e conceder VIP por performance se `get_seed_vip_config` nao retornar `requirements.max_allies` e `requirements.max_axis`. |
-| `PERFORMANCE_POLL_INTERVAL_MS` | Não | `1000` | Intervalo do polling de logs do Performance Bot. |
+| `PERFORMANCE_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Bot. |
 | `PERFORMANCE_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Bot. |
 | `PERFORMANCE_LOCK_FILE` | Não | `artifacts/performance-bot.lock` | Arquivo de lock do Performance Bot. |
 | `PERFORMANCE_STATE_FILE` | Não | `artifacts/performance-bot-state.json` | Persistência de estado do bot de performance. |
@@ -509,6 +509,8 @@ npm run bots
 ### Recomendação de produção
 
 Para manter o processo persistente, use um supervisor como `pm2` ou `systemd`.
+Antes de deixar o serviço rodando continuamente, aplique a política de retenção documentada em
+[`docs/plans/log-retention-spaceflood.md`](docs/plans/log-retention-spaceflood.md).
 
 #### Exemplo com PM2
 

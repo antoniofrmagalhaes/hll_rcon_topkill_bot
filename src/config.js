@@ -17,7 +17,7 @@ function readEnv() {
   return {
     baseUrl: process.env.RCON_BASE_URL.replace(/\/$/, ""),
     token: process.env.RCON_API_TOKEN,
-    pollIntervalMs: Number(process.env.BOT_POLL_INTERVAL_MS || 1000),
+    pollIntervalMs: Number(process.env.BOT_POLL_INTERVAL_MS || 5000),
     logWindow: Number(process.env.BOT_LOG_WINDOW || 120),
     lockFile: process.env.BOT_LOCK_FILE || "artifacts/bot.lock",
     topCommandCooldownMs: Number(process.env.BOT_TOP_COMMAND_COOLDOWN_MS || 15000),

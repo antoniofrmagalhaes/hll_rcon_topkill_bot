@@ -67,7 +67,7 @@ function readEnv() {
   return {
     baseUrl: process.env.RCON_BASE_URL.replace(/\/$/, ""),
     token: process.env.RCON_API_TOKEN,
-    pollIntervalMs: Number(process.env.PERFORMANCE_POLL_INTERVAL_MS || process.env.BOT_POLL_INTERVAL_MS || 1000),
+    pollIntervalMs: Number(process.env.PERFORMANCE_POLL_INTERVAL_MS || process.env.BOT_POLL_INTERVAL_MS || 5000),
     logWindow: Number(process.env.PERFORMANCE_LOG_WINDOW || process.env.BOT_LOG_WINDOW || 120),
     lockFile: process.env.PERFORMANCE_LOCK_FILE || "artifacts/performance-bot.lock",
     stateFile: process.env.PERFORMANCE_STATE_FILE || "artifacts/performance-bot-state.json",
