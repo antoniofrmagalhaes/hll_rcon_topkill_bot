@@ -42,10 +42,6 @@ function logInfo(message, data) {
   console.log(`[${nowIso()}] ${message}`);
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function remember(set, key, max = 1000) {
   set.add(key);
   if (set.size > max) {
@@ -551,7 +547,7 @@ function summarizeBestSquads(teamViewResponse) {
   return bestSquadsByTeam;
 }
 
-async function broadcastTop(client, cfg, reason, targetPlayer, options = {}) {
+async function broadcastTop(client, cfg, reason, targetPlayer) {
   logInfo("[top] collecting live match stats", {
     reason,
     targetPlayer: targetPlayer || null,
@@ -647,11 +643,6 @@ async function broadcastTop(client, cfg, reason, targetPlayer, options = {}) {
       save_message: false,
     });
   } else {
-    const delayMs = Number(options.delayBeforePublicMs || 0);
-    if (delayMs > 0) {
-      logInfo("[top] waiting before public match-end message", { delayMs });
-      await sleep(delayMs);
-    }
     logInfo("[top] sending chat message", { message });
     await client.post("message_all_players", { message });
   }
@@ -870,9 +861,7 @@ async function pollLogs(client, cfg) {
     cooldownMs: cfg.matchEndedCooldownMs,
   });
   await sendRankingSnapshot(client, cfg, latestMatchEndedLog);
-  await broadcastTop(client, cfg, "fim da partida", null, {
-    delayBeforePublicMs: cfg.matchEndBroadcastDelayMs,
-  });
+  await broadcastTop(client, cfg, "fim da partida");
   state.lastMatchEndKey = currentMatchEndKey;
   state.lastMatchEndedAtMs = nowMs;
   saveState();
@@ -900,7 +889,6 @@ async function main() {
     adminId: cfg.adminId,
     topCommandCooldownMs: cfg.topCommandCooldownMs,
     matchEndedCooldownMs: cfg.matchEndedCooldownMs,
-    matchEndBroadcastDelayMs: cfg.matchEndBroadcastDelayMs,
     stateFilePath,
     lastMatchEndKey: state.lastMatchEndKey,
     lastMatchEndedAtMs: state.lastMatchEndedAtMs,

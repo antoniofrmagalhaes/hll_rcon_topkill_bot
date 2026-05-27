@@ -47,10 +47,6 @@ function logInfo(message, data) {
   console.log(`[${nowIso()}] ${message}`);
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -77,11 +73,6 @@ function readEnv() {
     stateFile: process.env.PERFORMANCE_STATE_FILE || "artifacts/performance-bot-state.json",
     matchEndedCooldownMs: Number(
       process.env.PERFORMANCE_MATCH_ENDED_COOLDOWN_MS || process.env.BOT_MATCH_ENDED_COOLDOWN_MS || 300000
-    ),
-    matchEndBroadcastDelayMs: Number(
-      process.env.PERFORMANCE_MATCH_END_BROADCAST_DELAY_MS ||
-        process.env.MATCH_END_BROADCAST_DELAY_MS ||
-        40000
     ),
     statsEndpoint: process.env.PERFORMANCE_STATS_ENDPOINT || process.env.TOP_STATS_ENDPOINT || "get_live_game_stats",
     processMatchEnd: String(process.env.PERFORMANCE_PROCESS_MATCH_END || "true").toLowerCase() !== "false",
@@ -659,12 +650,6 @@ async function sendWinnerPrivate(client, cfg, preview) {
 
 async function publishPerformanceProduction(client, cfg, message, privateWinnerMessages) {
   if (cfg.sendPublic) {
-    if (cfg.matchEndBroadcastDelayMs > 0) {
-      logInfo("[performance] waiting before public match-end message", {
-        delayMs: cfg.matchEndBroadcastDelayMs,
-      });
-      await sleep(cfg.matchEndBroadcastDelayMs);
-    }
     logInfo("[performance] sending public performance message", { message });
     await client.post("message_all_players", { message });
   } else {
@@ -823,7 +808,6 @@ async function main() {
     lockFilePath,
     stateFilePath,
     matchEndedCooldownMs: cfg.matchEndedCooldownMs,
-    matchEndBroadcastDelayMs: cfg.matchEndBroadcastDelayMs,
     statsEndpoint: cfg.statsEndpoint,
     processMatchEnd: cfg.processMatchEnd,
     sendPublic: cfg.sendPublic,

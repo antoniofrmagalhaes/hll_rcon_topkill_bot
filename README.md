@@ -462,8 +462,6 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `BOT_LOCK_FILE` | Não | `artifacts/bot.lock` | Arquivo usado para lock do Top Bot. |
 | `BOT_TOP_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!top`. |
 | `BOT_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown para evitar republicações de `MATCH ENDED` pelo Top Bot. |
-| `MATCH_END_BROADCAST_DELAY_MS` | Não | `30000` | Atraso base antes de enviar anúncios públicos após `MATCH ENDED`, mantendo a coleta de dados imediata. |
-| `TOP_MATCH_END_BROADCAST_DELAY_MS` | Não | `MATCH_END_BROADCAST_DELAY_MS` ou `30000` | Atraso específico do anúncio público de top 10. |
 | `TOP_LIMIT` | Não | `10` | Quantidade de jogadores exibidos no ranking. |
 | `TOP_INCLUDE_HEADER` | Não | `true` | Adiciona ou remove cabeçalho da mensagem formatada. |
 | `TOP_COMMAND_ADMIN_ONLY` | Não | `false` | Quando `true`, o Top Bot só processa `!top` enviado pelo `ADMINISTRADOR_ID`. Útil para rodar bot local no servidor real sem responder a comandos de outros jogadores. |
@@ -492,7 +490,6 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `PERFORMANCE_LOCK_FILE` | Não | `artifacts/performance-bot.lock` | Arquivo de lock do Performance Bot. |
 | `PERFORMANCE_STATE_FILE` | Não | `artifacts/performance-bot-state.json` | Persistência de estado do bot de performance. |
 | `PERFORMANCE_MATCH_ENDED_COOLDOWN_MS` | Não | `300000` | Cooldown de `MATCH ENDED` do bot de performance. |
-| `PERFORMANCE_MATCH_END_BROADCAST_DELAY_MS` | Não | `MATCH_END_BROADCAST_DELAY_MS` ou `40000` | Atraso específico do anúncio público de performance. |
 | `PERFORMANCE_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário para coleta dos dados de performance. |
 
 ## Deploy em VPS
