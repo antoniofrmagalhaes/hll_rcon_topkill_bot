@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { RconClient } = require("./rconClient");
+const { renderMessageTemplate } = require("./messageTemplates");
 
 const required = ["RCON_API_TOKEN", "RCON_BASE_URL"];
 const seenCommands = new Set();
@@ -89,6 +90,16 @@ function releaseLock() {
   lockFd = null;
 }
 
+function isProcessRunning(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err?.code === "EPERM";
+  }
+}
+
 function acquireLock(filePath) {
   lockFilePath = path.isAbsolute(filePath) ? filePath : path.resolve(__dirname, "..", filePath);
   fs.mkdirSync(path.dirname(lockFilePath), { recursive: true });
@@ -100,11 +111,21 @@ function acquireLock(filePath) {
       const existingLock = readLockFile();
       const existingPid = Number(existingLock?.pid || 0);
       const startedAt = existingLock?.startedAt || null;
-      throw new Error(
-        `[lock] lock file already exists (${lockFilePath})${existingPid ? ` pid=${existingPid}` : ""}${startedAt ? ` startedAt=${startedAt}` : ""}`
-      );
+      if (existingPid && !isProcessRunning(existingPid)) {
+        logInfo("[lock] removing stale lock file", {
+          file: lockFilePath,
+          pid: existingPid,
+          startedAt,
+        });
+        fs.unlinkSync(lockFilePath);
+        lockFd = fs.openSync(lockFilePath, "wx");
+      } else {
+        throw new Error(
+          `[lock] lock file already exists (${lockFilePath})${existingPid ? ` pid=${existingPid}` : ""}${startedAt ? ` startedAt=${startedAt}` : ""}`
+        );
+      }
     }
-    throw err;
+    if (err?.code !== "EEXIST") throw err;
   }
 
   fs.writeFileSync(
@@ -165,7 +186,7 @@ function shouldSkipByCooldown(log, cfg) {
 }
 
 function formatPerformanceInfoMessage() {
-  return [
+  const fallback = [
     "VIP Por Performance",
     "",
     "Agora o VIP e por meta da classe final.",
@@ -185,6 +206,7 @@ function formatPerformanceInfoMessage() {
     "",
     "Premiacao: 1 dia de VIP nao acumulativo.",
   ].join("\n");
+  return renderMessageTemplate("performance.info.txt", {}, fallback, { logInfo });
 }
 
 async function sendPerformanceInfo(client, cfg, targetPlayer) {

@@ -1,0 +1,5 @@
+COMANDO - NODOS
+
+Engenheiro, seu time precisa de nodos para vencer.
+Construa manpower, municao e combustivel o quanto antes.
+Preferencia: base/ultimo ponto, atras da segunda linha. Se o ponto da frente cair, nodos avancados somem.

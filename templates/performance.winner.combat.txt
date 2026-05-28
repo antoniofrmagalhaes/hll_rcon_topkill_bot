@@ -1,0 +1,7 @@
+Parabens, {{playerName}}!
+
+Voce ficou em {{position}}o lugar entre os jogadores da partida.
+Pontuacao final: {{performanceScore}} pts
+{{scoreFormulaLines}}
+Premio: VIP ate {{vipUntil}}
+{{performanceInfoHint}}

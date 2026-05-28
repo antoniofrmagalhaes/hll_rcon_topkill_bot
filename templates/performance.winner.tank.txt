@@ -1,0 +1,8 @@
+Parabens, {{playerName}}!
+
+Seu squad de tanque {{squadName}} foi o melhor da partida.
+Pontuacao final do esquadrao: {{squadPerformanceScore}} pts
+Sua pontuacao: {{playerPerformanceScore}} pts
+{{scoreFormulaLines}}
+Premio: VIP ate {{vipUntil}}
+{{performanceInfoHint}}

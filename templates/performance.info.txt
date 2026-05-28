@@ -1,0 +1,18 @@
+VIP Por Performance
+
+Agora o VIP e por meta da classe final.
+Se bater a meta da sua classe, ganha VIP.
+
+Comandante:
+suporte x1.2, combate x0.7, ataque/defesa x0.7, abates x8
+
+Oficial/Suporte/Engenheiro/Medico:
+suporte pesa mais; objetivo e combate completam a pontuacao
+
+Assault/AT/MG/Rifleman/Sniper:
+combate e abates pesam mais; objetivo ainda conta
+
+Tanque e Recon:
+combate, objetivo e suporte conforme funcao
+
+Premiacao: 1 dia de VIP nao acumulativo.

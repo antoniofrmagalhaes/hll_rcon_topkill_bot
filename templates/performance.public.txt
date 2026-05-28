@@ -1,0 +1,10 @@
+TOP PERFORMANCE DA PARTIDA
+
+Melhor Comandante
+{{bestCommanderLine}}
+
+Top 3 Jogadores da Partida
+{{topCombatPlayersLines}}
+
+Melhor Squad Tanque
+{{bestTankSquadBlock}}

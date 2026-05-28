@@ -1,3 +1,5 @@
+const { renderMessageTemplate } = require("./messageTemplates");
+
 function numberValue(value) {
   const num = Number(value || 0);
   return Number.isFinite(num) ? num : 0;
@@ -803,16 +805,16 @@ function formatPerformanceMessage(result) {
   lines.push("");
 
   lines.push("Melhor Comandante");
-  if (result.bestCommander) {
-    lines.push(
-      `01 ${result.bestCommander.playerName} ${result.bestCommander.performanceScore} pts - ${vipStatus(result.bestCommander)}`
-    );
-  } else {
-    lines.push("Sem comandante");
-  }
+  const bestCommanderLine = result.bestCommander
+    ? `01 ${result.bestCommander.playerName} ${result.bestCommander.performanceScore} pts - ${vipStatus(result.bestCommander)}`
+    : "Sem comandante";
+  lines.push(bestCommanderLine);
 
   lines.push("");
   lines.push("Top 3 Jogadores da Partida");
+  const topCombatPlayersLines = result.topCombatPlayers.length
+    ? result.topCombatPlayers.map(formatPlayerLine).join("\n")
+    : "Sem jogadores com dados";
   if (result.topCombatPlayers.length) {
     lines.push(...result.topCombatPlayers.map(formatPlayerLine));
   } else {
@@ -821,19 +823,31 @@ function formatPerformanceMessage(result) {
 
   lines.push("");
   lines.push("Melhor Squad Tanque");
+  let bestTankSquadBlock = "Sem squad de tanque encontrado";
   if (result.bestTankSquad) {
-    lines.push(`${result.bestTankSquad.name} ${result.bestTankSquad.performanceScore} pts`);
+    const tankLines = [`${result.bestTankSquad.name} ${result.bestTankSquad.performanceScore} pts`];
     sortByIndividualScore(result.bestTankSquad.members).forEach((member, index) => {
       const pos = String(index + 1).padStart(2, "0");
-      lines.push(
+      tankLines.push(
         `${pos} ${member.playerName} ${member.performanceScore} pts - ${vipStatus(member)}`
       );
     });
+    bestTankSquadBlock = tankLines.join("\n");
+    lines.push(...tankLines);
   } else {
     lines.push("Sem squad de tanque encontrado");
   }
 
-  return lines.join("\n");
+  const fallback = lines.join("\n");
+  return renderMessageTemplate(
+    "performance.public.txt",
+    {
+      bestCommanderLine,
+      topCombatPlayersLines,
+      bestTankSquadBlock,
+    },
+    fallback
+  );
 }
 
 function formatRoleMetricsMessage(result, commandConfig) {
@@ -845,19 +859,41 @@ function formatRoleMetricsMessage(result, commandConfig) {
 
   if (!guideLines.length) {
     lines.push("Jogue perto do seu esquadrao, siga a funcao da classe e ajude o time a manter pressao no objetivo.");
-    return lines.join("\n");
+    const fallback = lines.join("\n");
+    return renderMessageTemplate(
+      "performance.role-guide.txt",
+      {
+        roleTitle: commandConfig.title.toUpperCase(),
+        roleGuideLines: lines.slice(2).join("\n"),
+      },
+      fallback
+    );
   }
 
   lines.push(...guideLines);
 
-  return lines.join("\n");
+  const fallback = lines.join("\n");
+  return renderMessageTemplate(
+    "performance.role-guide.txt",
+    {
+      roleTitle: commandConfig.title.toUpperCase(),
+      roleGuideLines: guideLines.join("\n"),
+    },
+    fallback
+  );
 }
 
 function formatClassesMessage() {
-  return [
+  const classCommandLines = ROLE_HELP_COMMANDS.map(([label, command]) => `${command} (${label})`).join("\n");
+  const fallback = [
     "CLASSES",
-    ...ROLE_HELP_COMMANDS.map(([label, command]) => `${command} (${label})`),
+    classCommandLines,
   ].join("\n");
+  return renderMessageTemplate(
+    "performance.classes.txt",
+    { classCommandLines },
+    fallback
+  );
 }
 
 function formatPrivateWinnerMessages(result, vipExpirationValue = "1 day") {
@@ -874,49 +910,85 @@ function formatPrivateWinnerMessages(result, vipExpirationValue = "1 day") {
   }
 
   if (result.bestCommander && !result.bestCommander.isVip && !alreadyAwarded(result.bestCommander)) {
+    const scoreFormulaLines = formatScoreFormulaLines([
+      { label: "Suporte", value: result.bestCommander.support, multiplier: 1 },
+      { label: "Combate", value: result.bestCommander.combat, multiplier: 1 },
+      { label: "Ataque", value: result.bestCommander.offense, multiplier: 0.5 },
+      { label: "Defesa", value: result.bestCommander.defense, multiplier: 0.5 },
+      { label: "Abates", value: result.bestCommander.kills, multiplier: 10 },
+    ]).join("\n");
+    const fallback = [
+      `Parabens, ${result.bestCommander.playerName}!`,
+      "",
+      "Voce foi o melhor comandante da partida.",
+      `Pontuacao final: ${result.bestCommander.performanceScore} pts`,
+      scoreFormulaLines,
+      `Premio: VIP ate ${vipUntil}`,
+      performanceInfoHint(),
+    ].join("\n");
     messages.push({
       category: "commander",
       player: result.bestCommander,
-      message: [
-        `Parabens, ${result.bestCommander.playerName}!`,
-        "",
-        "Voce foi o melhor comandante da partida.",
-        `Pontuacao final: ${result.bestCommander.performanceScore} pts`,
-        ...formatScoreFormulaLines([
-          { label: "Suporte", value: result.bestCommander.support, multiplier: 1 },
-          { label: "Combate", value: result.bestCommander.combat, multiplier: 1 },
-          { label: "Ataque", value: result.bestCommander.offense, multiplier: 0.5 },
-          { label: "Defesa", value: result.bestCommander.defense, multiplier: 0.5 },
-          { label: "Abates", value: result.bestCommander.kills, multiplier: 10 },
-        ]),
-        `Premio: VIP ate ${vipUntil}`,
-        performanceInfoHint(),
-      ].join("\n"),
+      message: renderMessageTemplate(
+        "performance.winner.commander.txt",
+        {
+          playerName: result.bestCommander.playerName,
+          performanceScore: result.bestCommander.performanceScore,
+          scoreFormulaLines,
+          vipUntil,
+          performanceInfoHint: performanceInfoHint(),
+          support: result.bestCommander.support,
+          combat: result.bestCommander.combat,
+          offense: result.bestCommander.offense,
+          defense: result.bestCommander.defense,
+          kills: result.bestCommander.kills,
+        },
+        fallback
+      ),
     });
   }
 
   result.topCombatPlayers.forEach((player, index) => {
     if (player.isVip) return;
     if (alreadyAwarded(player)) return;
+    const scoreFormulaLines = formatScoreFormulaLines([
+      { label: "Kills", value: player.kills, multiplier: 20 },
+      { label: "KPM", value: formatDecimal(player.kpm), multiplier: 100 },
+      { label: "Combate", value: player.combat, multiplier: 1 },
+      { label: "Ataque", value: player.offense, multiplier: 1 },
+      { label: "Defesa", value: player.defense, multiplier: 1 },
+      { label: "Suporte", value: player.support, multiplier: 1.2 },
+    ]).join("\n");
+    const fallback = [
+      `Parabens, ${player.playerName}!`,
+      "",
+      `Voce ficou em ${index + 1}o lugar entre os jogadores da partida.`,
+      `Pontuacao final: ${player.performanceScore} pts`,
+      scoreFormulaLines,
+      `Premio: VIP ate ${vipUntil}`,
+      performanceInfoHint(),
+    ].join("\n");
     messages.push({
       category: "combat",
       player,
-      message: [
-        `Parabens, ${player.playerName}!`,
-        "",
-        `Voce ficou em ${index + 1}o lugar entre os jogadores da partida.`,
-        `Pontuacao final: ${player.performanceScore} pts`,
-        ...formatScoreFormulaLines([
-          { label: "Kills", value: player.kills, multiplier: 20 },
-          { label: "KPM", value: formatDecimal(player.kpm), multiplier: 100 },
-          { label: "Combate", value: player.combat, multiplier: 1 },
-          { label: "Ataque", value: player.offense, multiplier: 1 },
-          { label: "Defesa", value: player.defense, multiplier: 1 },
-          { label: "Suporte", value: player.support, multiplier: 1.2 },
-        ]),
-        `Premio: VIP ate ${vipUntil}`,
-        performanceInfoHint(),
-      ].join("\n"),
+      message: renderMessageTemplate(
+        "performance.winner.combat.txt",
+        {
+          playerName: player.playerName,
+          position: index + 1,
+          performanceScore: player.performanceScore,
+          scoreFormulaLines,
+          vipUntil,
+          performanceInfoHint: performanceInfoHint(),
+          kills: player.kills,
+          kpm: formatDecimal(player.kpm),
+          combat: player.combat,
+          offense: player.offense,
+          defense: player.defense,
+          support: player.support,
+        },
+        fallback
+      ),
     });
   });
 
@@ -924,26 +996,46 @@ function formatPrivateWinnerMessages(result, vipExpirationValue = "1 day") {
     for (const member of result.bestTankSquad.members) {
       if (member.isVip) continue;
       if (alreadyAwarded(member)) continue;
+      const scoreFormulaLines = formatScoreFormulaLines([
+        { label: "Kills", value: member.kills, multiplier: 10 },
+        { label: "Combate", value: member.combat, multiplier: 1 },
+        { label: "Ataque", value: member.offense, multiplier: 1 },
+        { label: "Defesa", value: member.defense, multiplier: 1 },
+        { label: "Suporte", value: member.support, multiplier: 1 },
+      ]).join("\n");
+      const fallback = [
+        `Parabens, ${member.playerName}!`,
+        "",
+        `Seu squad de tanque ${result.bestTankSquad.name} foi o melhor da partida.`,
+        `Pontuacao final do esquadrao: ${result.bestTankSquad.performanceScore} pts`,
+        `Sua pontuacao: ${member.performanceScore} pts`,
+        scoreFormulaLines,
+        `Premio: VIP ate ${vipUntil}`,
+        performanceInfoHint(),
+      ].join("\n");
       messages.push({
         category: "tank",
         player: member,
         squad: result.bestTankSquad,
-        message: [
-          `Parabens, ${member.playerName}!`,
-          "",
-          `Seu squad de tanque ${result.bestTankSquad.name} foi o melhor da partida.`,
-          `Pontuacao final do esquadrao: ${result.bestTankSquad.performanceScore} pts`,
-          `Sua pontuacao: ${member.performanceScore} pts`,
-          ...formatScoreFormulaLines([
-            { label: "Kills", value: member.kills, multiplier: 10 },
-            { label: "Combate", value: member.combat, multiplier: 1 },
-            { label: "Ataque", value: member.offense, multiplier: 1 },
-            { label: "Defesa", value: member.defense, multiplier: 1 },
-            { label: "Suporte", value: member.support, multiplier: 1 },
-          ]),
-          `Premio: VIP ate ${vipUntil}`,
-          performanceInfoHint(),
-        ].join("\n"),
+        message: renderMessageTemplate(
+          "performance.winner.tank.txt",
+          {
+            playerName: member.playerName,
+            squadName: result.bestTankSquad.name,
+            squadPerformanceScore: result.bestTankSquad.performanceScore,
+            playerPerformanceScore: member.performanceScore,
+            performanceScore: member.performanceScore,
+            scoreFormulaLines,
+            vipUntil,
+            performanceInfoHint: performanceInfoHint(),
+            kills: member.kills,
+            combat: member.combat,
+            offense: member.offense,
+            defense: member.defense,
+            support: member.support,
+          },
+          fallback
+        ),
       });
     }
   }

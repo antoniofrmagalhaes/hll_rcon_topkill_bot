@@ -1,3 +1,5 @@
+const { renderMessageTemplate } = require("./messageTemplates");
+
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -152,7 +154,12 @@ async function handleOpCommand(client, cfg, log, logInfo) {
     return;
   }
 
-  const message = "MENSAGEM DO PELOTÃO\n\nCADE O OP PORRA?!";
+  const message = renderMessageTemplate(
+    "op.reminder.txt",
+    {},
+    "MENSAGEM DO PELOTÃO\n\nCADE O OP PORRA?!",
+    { logInfo }
+  );
 
   if (cfg.dryRun) {
     logInfo("[op] clan flow validated (dry-run)", {

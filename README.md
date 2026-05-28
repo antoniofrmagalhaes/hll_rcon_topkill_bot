@@ -37,7 +37,7 @@
 Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conectados ao CRCON:
 
 - descobre e valida endpoints da API;
-- monitora logs recentes para capturar os comandos `!top`, `!op`, `!n`, `!nodos`, `!perf`, `!performance` e previews admin como `!tp`;
+- monitora logs recentes para capturar os comandos `!top`, `!op`, `!n`, `!nodos`, `!perf`, `!performance` e previews admin como `!t`, `!p` e `!tp`;
 - envia o ranking de abates em mensagem privada para quem acionou o comando;
 - envia lembrete privado de OP para o oficial do squad quando o comando `!op` passa nas regras de tag;
 - detecta `MATCH ENDED` e publica automaticamente o top da partida;
@@ -166,7 +166,7 @@ src/runBots.js
   ├─ src/performanceInfoBot.js
   │   └─ detecção de !perf / !performance
   └─ src/performanceBot.js
-      ├─ preview administrativo !tp
+      ├─ preview administrativo !p / !tp
       ├─ performance em MATCH ENDED
       ├─ concessão de VIP
       └─ mensagens públicas/privadas
@@ -186,7 +186,7 @@ src/runBots.js
 - Requests de scoreboard e envio de mensagens só acontecem quando há evento relevante.
 - O ranking ordena por `kills`, depois `kd`, depois menor número de mortes e por fim nome.
 - Comandos administrativos de preview dependem de `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`.
-- `!tp` e `!t` sempre redirecionam a prévia por privado para o administrador, sem publicar no servidor.
+- `!p`, `!tp` e `!t` sempre redirecionam a prévia por privado para o administrador, sem publicar no servidor.
 - `!op` é operacional: emissor e oficial do squad precisam usar prefixo de clã aceito.
 - `!n`/`!nodos` é operacional: comandante do time pode acionar; o administrador também pode acionar se estiver em um time.
 - O bot de performance tem estado próprio para processar cada `MATCH ENDED` uma única vez.
@@ -242,7 +242,7 @@ src/runBots.js
 - `src/nodos.js`: valida comandante/admin, localiza oficiais/engenheiros no `get_team_view` e envia lembretes privados de nodos.
 - `src/op.js`: valida tags de clã, localiza o oficial do squad via `get_team_view` e envia lembrete privado de OP.
 - `src/performance.js`: cálculo e formatação das metas de performance por classe.
-- `src/performanceBot.js`: bot de produção para performance/VIP no fim da partida e preview administrativo `!tp`.
+- `src/performanceBot.js`: bot de produção para performance/VIP no fim da partida e preview administrativo `!p`/`!tp`.
 - `src/performanceInfoBot.js`: bot informativo para `!perf` e `!performance`.
 - `src/rconClient.js`: cliente HTTP com autenticação Bearer e logging resumido.
 - `src/runBots.js`: runner local/produção para subir os bots juntos.
@@ -351,7 +351,7 @@ npm run stop
 4. Envie `!perf` ou `!performance` para validar a mensagem informativa.
 5. Se for testar previews administrativos, configure `ENABLE_TEST_COMMANDS=true` e confira se `ADMINISTRADOR_ID` é o ID real do jogador no servidor.
 6. Envie `!t` para receber a prévia do top abates por privado.
-7. Envie `!tp` para receber a prévia de performance por privado.
+7. Envie `!p` ou `!tp` para receber a prévia de performance por privado.
 8. Envie `!op` como jogador com tag em um squad cujo oficial tambem tenha tag para validar o lembrete privado de OP.
 9. Envie `!n` ou `!nodos` como comandante, ou como administrador em um time, para validar os lembretes privados de nodos.
 10. Verifique o terminal.
@@ -435,7 +435,7 @@ Resumo dos comandos administrativos:
 | Comando | Bot | Requisito | Destino |
 | --- | --- | --- | --- |
 | `!t` | Top Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
-| `!tp` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
+| `!p` / `!tp` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
 | `!classes` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
 | `!commander`, `!officer`, `!rifleman`/`!shooter`, `!assault`, `!automaticrifleman`, `!medic`, `!support`, `!machinegunner`, `!antitank`, `!engineer`, `!tankcommander`, `!crewman`, `!spotter`, `!sniper` | Performance Bot | `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID` | Privado para `ADMINISTRADOR_ID` |
 
@@ -465,21 +465,27 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `TOP_LIMIT` | Não | `10` | Quantidade de jogadores exibidos no ranking. |
 | `TOP_INCLUDE_HEADER` | Não | `true` | Adiciona ou remove cabeçalho da mensagem formatada. |
 | `TOP_COMMAND_ADMIN_ONLY` | Não | `false` | Quando `true`, o Top Bot só processa `!top` enviado pelo `ADMINISTRADOR_ID`. Útil para rodar bot local no servidor real sem responder a comandos de outros jogadores. |
+| `TOP_PROCESS_MATCH_END` | Não | `true` | Quando `false`, o Top Bot ignora `MATCH ENDED` e nao publica top automaticamente. Útil para testes locais apenas com `!t`. |
 | `TOP_STATS_ENDPOINT` | Não | `get_live_game_stats` | Endpoint primário para coletar dados do ranking. |
+| `MESSAGE_TEMPLATES_ENABLED` | Não | `true` | Liga leitura de templates em `.txt` para as mensagens dos bots. |
+| `MESSAGE_TEMPLATES_DIR` | Não | `templates` | Diretório base dos templates de mensagem. |
+| `MESSAGE_TEMPLATE_STRICT` | Não | `false` | Quando `true`, trata template ausente/invalido como erro; em produção, manter `false` para cair no texto padrão. |
+| `MESSAGE_TEMPLATE_CACHE_MS` | Não | `30000` | Tempo de cache dos arquivos de template. |
 | `BOT_DRY_RUN` | Não | `false` | Não envia mensagens reais; apenas loga as ações. |
 | `BOT_STATE_FILE` | Não | `artifacts/bot-state.json` | Persistência de estado para deduplicação entre restarts. |
 | `TOP_BOT_ENABLED` | Não | `true` | Ativa o bot de `!top` no runner `npm run bots`. |
 | `OP_BOT_ENABLED` | Não | `true` | Ativa o comando `!op` dentro do Top Bot. |
+| `NODOS_BOT_ENABLED` | Não | `true` | Ativa os comandos `!n`/`!nodos` dentro do Top Bot. |
 | `PERFORMANCE_INFO_BOT_ENABLED` | Não | `true` | Ativa o bot informativo `!perf`/`!performance`. |
 | `PERFORMANCE_BOT_ENABLED` | Não | `false` | Ativa o bot de performance/VIP no runner. |
-| `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos privados, como `!t`, `!tp`, `!classes` e métricas por classe. |
+| `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos privados, como `!t`, `!p`, `!tp`, `!classes` e métricas por classe. |
 | `ADMINISTRADOR_ID` | Para comandos administrativos | - | SteamID autorizado a executar comandos administrativos e receber as prévias por privado. Tambem pode acionar `!nodos` sem ser comandante, se estiver em um time. |
 | `PERFORMANCE_INFO_DRY_RUN` | Não | `false` | Não envia respostas reais do Performance Info Bot; apenas loga as ações. |
 | `PERFORMANCE_INFO_POLL_INTERVAL_MS` | Não | `5000` | Intervalo do polling de logs do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOG_WINDOW` | Não | `120` | Janela de logs recentes do Performance Info Bot. |
 | `PERFORMANCE_INFO_LOCK_FILE` | Não | `artifacts/performance-info-bot.lock` | Arquivo de lock do Performance Info Bot. |
 | `PERFORMANCE_INFO_COMMAND_COOLDOWN_MS` | Não | `15000` | Cooldown por jogador para `!perf`/`!performance`. |
-| `PERFORMANCE_PROCESS_MATCH_END` | Não | `true` | Processa `MATCH ENDED` real. Use `false` em teste local para permitir `!tp`, `!classes` e comandos por classe sem publicar nem premiar jogadores. |
+| `PERFORMANCE_PROCESS_MATCH_END` | Não | `true` | Processa `MATCH ENDED` real. Use `false` em teste local para permitir `!p`, `!tp`, `!classes` e comandos por classe sem publicar nem premiar jogadores. |
 | `PERFORMANCE_SEND_PUBLIC` | Não | `true` | Envia anúncio público de performance no `MATCH ENDED`. |
 | `PERFORMANCE_SEND_WINNER_PRIVATE` | Não | `true` | Envia mensagem privada para vencedores premiados. |
 | `PERFORMANCE_GRANT_VIP` | Não | `true` | Chama `add_vip` para vencedores sem VIP. |
@@ -627,7 +633,7 @@ Checklist antes de considerar o deploy concluído:
 - `git status --short` não mostra alterações inesperadas na VPS;
 - não existe erro de lock em `artifacts/*.lock`;
 - logs mostram os bots iniciando uma única vez;
-- `!top`, `!perf` e o preview admin `!tp` respondem quando acionados pelo administrador.
+- `!top`, `!perf` e o preview admin `!p`/`!tp` respondem quando acionados pelo administrador.
 
 ### Parar bots em produção por SSH
 
@@ -699,7 +705,7 @@ Confira se `RCON_API_TOKEN` e `RCON_BASE_URL` existem no `.env` e estão preench
 - confirme se o emissor aparece em um squad no `get_team_view`;
 - revise o cooldown de `BOT_TOP_COMMAND_COOLDOWN_MS`, usado também pelo comando `!op`.
 
-### `!tp` ou `!t` não respondem
+### `!p`, `!tp` ou `!t` não respondem
 
 - confirme se `ENABLE_TEST_COMMANDS=true` no `.env` carregado pelo processo;
 - confirme se `ADMINISTRADOR_ID` bate exatamente com o `player_id_1` do jogador nos logs do CRCON;

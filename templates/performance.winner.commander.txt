@@ -1,0 +1,7 @@
+Parabens, {{playerName}}!
+
+Voce foi o melhor comandante da partida.
+Pontuacao final: {{performanceScore}} pts
+{{scoreFormulaLines}}
+Premio: VIP ate {{vipUntil}}
+{{performanceInfoHint}}

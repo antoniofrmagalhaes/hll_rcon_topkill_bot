@@ -1,3 +1,5 @@
+const { renderMessageTemplate } = require("./messageTemplates");
+
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -108,23 +110,25 @@ function summarizeRoles(players) {
 }
 
 function formatNodosOfficerMessage() {
-  return [
+  const fallback = [
     "COMANDO - NODOS",
     "",
     "Oficiais, cobrem seus engenheiros para construir nodos agora.",
     "Nodos vencem partidas: eles mantem recursos para bombing, reforco, tanques e habilidades do comandante.",
     "Orientem construir na base, atras da segunda linha, no quadrante do ultimo ponto.",
   ].join("\n");
+  return renderMessageTemplate("nodos.officer.txt", {}, fallback);
 }
 
 function formatNodosEngineerMessage() {
-  return [
+  const fallback = [
     "COMANDO - NODOS",
     "",
     "Engenheiro, seu time precisa de nodos para vencer.",
     "Construa manpower, municao e combustivel o quanto antes.",
     "Preferencia: base/ultimo ponto, atras da segunda linha. Se o ponto da frente cair, nodos avancados somem.",
   ].join("\n");
+  return renderMessageTemplate("nodos.engineer.txt", {}, fallback);
 }
 
 async function sendPrivate(client, target, message, by) {

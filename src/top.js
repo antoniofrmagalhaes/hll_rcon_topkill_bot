@@ -1,3 +1,5 @@
+const { renderMessageTemplate } = require("./messageTemplates");
+
 function normalizePlayers(scoreboardResponse) {
   const stats =
     scoreboardResponse?.result?.stats ||
@@ -68,9 +70,8 @@ function formatTopMessage(
   } = {}
 ) {
   const lines = topPlayers.map((p, idx) => {
-    const position = String(idx + 1).padStart(2, " ");
-    const kills = String(p.kills).padStart(2, " ");
-    return `${position} ${p.playerName} ${kills} abates`;
+    const position = `${idx + 1}°`;
+    return `${position} ${p.playerName} ${p.kills} abates`;
   });
 
   const commanderLines = bestCommander
@@ -82,7 +83,7 @@ function formatTopMessage(
       ]
     : [];
 
-  const squadSections = ["axis", "allies"].flatMap((team) => {
+  const squadSectionLines = ["axis", "allies"].flatMap((team) => {
     const squad = bestSquadsByTeam?.[team] || null;
     const title = team === "axis" ? "Melhor Esquadrão Eixo" : "Melhor Esquadrão Aliados";
 
@@ -101,13 +102,34 @@ function formatTopMessage(
     ];
   });
 
-  const body = [...lines, ...commanderLines, ...squadSections].join("\n");
+  const body = [...lines, ...commanderLines, ...squadSectionLines].join("\n");
+  const commanderBlock = commanderLines.length ? `\n${commanderLines.join("\n")}` : "";
+  const squadSectionsBlock = `\n${squadSectionLines.join("\n")}`;
 
   if (!includeHeader) {
-    return body;
+    return renderMessageTemplate(
+      "top.message.txt",
+      {
+        topHeader: "",
+        topPlayersLines: lines.join("\n"),
+        commanderBlock,
+        squadSectionsBlock,
+      },
+      body
+    );
   }
 
-  return `TOP 10 Abates\n\n${body}`;
+  const fallback = `TOP 10 Abates\n\n${body}`;
+  return renderMessageTemplate(
+    "top.message.txt",
+    {
+      topHeader: "TOP 10 Abates\n\n",
+      topPlayersLines: lines.join("\n"),
+      commanderBlock,
+      squadSectionsBlock,
+    },
+    fallback
+  );
 }
 
 module.exports = { normalizePlayers, computeTopKillers, formatTopMessage, formatSquadMembers };
