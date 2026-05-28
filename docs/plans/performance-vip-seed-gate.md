@@ -119,6 +119,24 @@ Isso evita mensagem enganosa: `formatPerformanceMessage()` e
 Previews administrativos continuam independentes do gate, porque nao concedem
 VIP real.
 
+## Ajuste de producao em 2026-05-28
+
+Em producao, um `MATCH ENDED` de `SAINTE-MERE-EGLISE Warfare` foi detectado
+com `get_recent_logs.result.players` contendo 114 nomes, mas esse campo nao e
+a populacao atual da partida; ele e uma lista agregada do recorte de logs e pode
+passar do limite maximo de slots da partida.
+
+O gate consultou `get_gamestate` depois do fim da partida e recebeu apenas 2
+jogadores (`num_allied_players = 1`, `num_axis_players = 1`). Como o limite
+minimo era 41, o bot bloqueou a premiacao por seed mesmo a partida tendo sido
+cheia.
+
+Conclusao operacional: `get_recent_logs.result.players.length` nao deve ser usado
+como populacao exata. O ajuste correto e manter um snapshot/cache de populacao e
+estatisticas ainda durante a partida e usar esse snapshot quando o `MATCH ENDED`
+chegar, porque `get_gamestate` e `get_live_game_stats` podem ja representar o
+proximo estado pos-partida.
+
 ## Logs esperados
 
 ```text
