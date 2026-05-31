@@ -718,13 +718,11 @@ async function pollLogs(client, cfg) {
       if (isPerformanceCommand(log, cfg)) {
         remember(seenCommands, commandKey(log));
       }
-      if (String(log.action || "") === "MATCH ENDED") {
-        remember(seenMatchEndEvents, matchEndKey(log));
-      }
     }
     logsWarmedUp = true;
-    logInfo("[poll] warm-up complete", { commandsSeen: seenCommands.size });
-    return;
+    logInfo("[poll] warm-up complete; match-end events remain eligible", {
+      commandsSeen: seenCommands.size,
+    });
   }
 
   let latestMatchEndedLog = null;
@@ -804,20 +802,23 @@ async function pollLogs(client, cfg) {
     matchEndKey: currentMatchEndKey,
     cooldownMs: cfg.matchEndedCooldownMs,
   });
-  state.lastMatchEndKey = currentMatchEndKey;
-  state.lastMatchEndedAtMs = nowMs;
-  saveState();
 
   if (!(await canAwardVipForPopulation(client, cfg))) {
     logInfo("[event] MATCH ENDED performance award skipped by population gate", {
       matchEndKey: currentMatchEndKey,
       fallbackMinPlayers: cfg.minPlayersForVip,
     });
+    state.lastMatchEndKey = currentMatchEndKey;
+    state.lastMatchEndedAtMs = nowMs;
+    saveState();
     return;
   }
 
   const { message, privateWinnerMessages } = await collectPerformance(client, cfg);
   await publishPerformanceProduction(client, cfg, message, privateWinnerMessages);
+  state.lastMatchEndKey = currentMatchEndKey;
+  state.lastMatchEndedAtMs = nowMs;
+  saveState();
 }
 
 async function main() {

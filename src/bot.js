@@ -706,12 +706,14 @@ async function pollLogs(client, cfg) {
           remember(seenOpCommands, opCommandKey(log));
         }
       }
-      if (String(log.action || "") === "MATCH ENDED") {
-        remember(seenMatchEndEvents, matchEndKey(log));
-      }
     }
     logsWarmedUp = true;
-    return;
+    logInfo("[poll] warm-up complete; match-end events remain eligible", {
+      topCommandsSeen: seenTopCommands.size,
+      topPreviewCommandsSeen: seenTopPreviewCommands.size,
+      nodosCommandsSeen: seenNodosCommands.size,
+      opCommandsSeen: seenOpCommands.size,
+    });
   }
 
   let latestMatchEndedLog = null;
