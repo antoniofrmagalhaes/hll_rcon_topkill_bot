@@ -93,13 +93,14 @@ function shouldSkipTopCommandByCooldown(log, cfg) {
 }
 
 function matchEndKey(log) {
+  const ts = Number(log?.timestamp_ms || 0);
+  const tsBucket = Number.isFinite(ts) && ts > 0 ? `|${Math.floor(ts / 300000)}` : "";
   const summary = normalizeText(log?.sub_content || log?.message || log?.raw);
   if (summary) {
-    return `match-ended|${summary}`;
+    return `match-ended|${summary}${tsBucket}`;
   }
-  const ts = Number(log?.timestamp_ms || 0);
-  if (Number.isFinite(ts) && ts > 0) {
-    return `match-ended|${Math.floor(ts / 1000)}`;
+  if (tsBucket) {
+    return `match-ended${tsBucket}`;
   }
   return "match-ended|unknown";
 }
@@ -872,7 +873,6 @@ async function pollLogs(client, cfg) {
     return;
   }
 
-  loadState();
   const currentMatchEndKey = matchEndKey(latestMatchEndedLog);
   const nowMs = Date.now();
   const elapsedMs = nowMs - Number(state.lastMatchEndedAtMs || 0);
@@ -892,14 +892,18 @@ async function pollLogs(client, cfg) {
     return;
   }
 
-  remember(seenMatchEndEvents, currentMatchEndKey);
   logInfo("[event] MATCH ENDED detected", {
     raw: latestMatchEndedLog.raw || null,
     matchEndKey: currentMatchEndKey,
     cooldownMs: cfg.matchEndedCooldownMs,
   });
-  await sendRankingSnapshot(client, cfg, latestMatchEndedLog);
+  try {
+    await sendRankingSnapshot(client, cfg, latestMatchEndedLog);
+  } catch (err) {
+    logInfo("[ranking] snapshot failed, continuing with broadcast", { error: err.message });
+  }
   await broadcastTop(client, cfg, "fim da partida");
+  remember(seenMatchEndEvents, currentMatchEndKey);
   state.lastMatchEndKey = currentMatchEndKey;
   state.lastMatchEndedAtMs = nowMs;
   saveState();

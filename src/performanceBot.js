@@ -254,13 +254,14 @@ function commandKey(log) {
 }
 
 function matchEndKey(log) {
+  const ts = Number(log?.timestamp_ms || 0);
+  const tsBucket = Number.isFinite(ts) && ts > 0 ? `|${Math.floor(ts / 300000)}` : "";
   const summary = normalizeText(log?.sub_content || log?.message || log?.raw);
   if (summary) {
-    return `match-ended|${summary}`;
+    return `match-ended|${summary}${tsBucket}`;
   }
-  const ts = Number(log?.timestamp_ms || 0);
-  if (Number.isFinite(ts) && ts > 0) {
-    return `match-ended|${Math.floor(ts / 1000)}`;
+  if (tsBucket) {
+    return `match-ended${tsBucket}`;
   }
   return "match-ended|unknown";
 }
@@ -796,7 +797,6 @@ async function pollLogs(client, cfg) {
     return;
   }
 
-  remember(seenMatchEndEvents, currentMatchEndKey);
   logInfo("[event] MATCH ENDED detected for performance", {
     raw: latestMatchEndedLog.raw || null,
     matchEndKey: currentMatchEndKey,
@@ -811,6 +811,7 @@ async function pollLogs(client, cfg) {
     state.lastMatchEndKey = currentMatchEndKey;
     state.lastMatchEndedAtMs = nowMs;
     saveState();
+    remember(seenMatchEndEvents, currentMatchEndKey);
     return;
   }
 
@@ -819,6 +820,7 @@ async function pollLogs(client, cfg) {
   state.lastMatchEndKey = currentMatchEndKey;
   state.lastMatchEndedAtMs = nowMs;
   saveState();
+  remember(seenMatchEndEvents, currentMatchEndKey);
 }
 
 async function main() {
