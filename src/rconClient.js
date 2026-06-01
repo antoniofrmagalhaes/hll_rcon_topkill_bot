@@ -13,6 +13,7 @@ class RconClient {
   }
 
   async request(endpoint, method, body, query = null) {
+    const startedAt = Date.now();
     const url = new URL(`${this.baseUrl}/api/${endpoint}`);
     if (query && typeof query === "object") {
       for (const [key, value] of Object.entries(query)) {
@@ -31,25 +32,69 @@ class RconClient {
       headers,
       body: method === "POST" ? JSON.stringify(body) : undefined,
     });
+    const text = await response.text();
+    const durationMs = Date.now() - startedAt;
+    const responseBytes = Buffer.byteLength(text, "utf8");
 
     if (!response.ok) {
-      const text = await response.text();
+      this.logCollectionReturn({
+        endpoint,
+        method,
+        response: null,
+        status: response.status,
+        durationMs,
+        responseBytes,
+      });
       throw new Error(`[${method}] ${endpoint} failed (${response.status}): ${text}`);
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      this.logCollectionReturn({
+        endpoint,
+        method,
+        response: null,
+        status: response.status,
+        durationMs,
+        responseBytes,
+      });
+      throw err;
+    }
     if (data.failed) {
+      this.logCollectionReturn({
+        endpoint,
+        method,
+        response: data,
+        status: response.status,
+        durationMs,
+        responseBytes,
+      });
       throw new Error(`[${method}] ${endpoint} returned failed=true: ${JSON.stringify(data.error)}`);
     }
 
-    this.logCollectionReturn({ endpoint, method, response: data });
+    this.logCollectionReturn({
+      endpoint,
+      method,
+      response: data,
+      status: response.status,
+      durationMs,
+      responseBytes,
+    });
     return data;
   }
 
-  logCollectionReturn({ endpoint, method, response }) {
+  logCollectionReturn({ endpoint, method, response, status, durationMs, responseBytes }) {
     const result = response?.result;
     const summary = {
-      ok: response?.failed === false || response?.failed === undefined,
+      status,
+      durationMs,
+      responseBytes,
+      ok:
+        status >= 200 &&
+        status < 300 &&
+        (response?.failed === false || response?.failed === undefined),
       hasResult: Boolean(result && typeof result === "object"),
       resultKeys: result && typeof result === "object" ? Object.keys(result) : [],
       statsCount: Array.isArray(result?.stats) ? result.stats.length : null,
