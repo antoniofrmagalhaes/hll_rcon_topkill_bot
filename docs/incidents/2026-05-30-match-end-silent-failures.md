@@ -50,6 +50,8 @@ Duas partidas com o mesmo mapa e placar, jogadas horas ou dias depois, geravam a
 
 4. Em `bot.js`, `loadState()` foi removido de dentro de `pollLogs()`. O estado e carregado uma vez em `main()` na inicializacao e atualizado em memoria apos cada processamento.
 
+5. Em 2026-06-01, `broadcastTop` no fluxo de `MATCH ENDED` passou a ser protegido por `try/catch`. Se o broadcast falhar, o evento nao e marcado como processado e sera retentado no proximo polling. Se o broadcast concluir com sucesso, os guards de deduplicacao sao gravados normalmente.
+
 ## Compatibilidade com arquivos de estado existentes
 
 Os arquivos `artifacts/bot-state.json` e `artifacts/performance-bot-state.json` contem chaves no formato antigo (sem bucket de timestamp). Apos o deploy, essas chaves nao batirao com nenhuma nova chave — o que faz a primeira partida apos o restart ser processada normalmente. O cooldown de 5 minutos ainda protege contra duplicatas durante a transicao.

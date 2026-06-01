@@ -898,11 +898,14 @@ async function pollLogs(client, cfg) {
     cooldownMs: cfg.matchEndedCooldownMs,
   });
   try {
-    await sendRankingSnapshot(client, cfg, latestMatchEndedLog);
+    await sendRankingSnapshot(client, cfg, latestMatchEndedLog).catch((err) => {
+      logInfo("[ranking] snapshot failed, continuing with broadcast", { error: err.message });
+    });
+    await broadcastTop(client, cfg, "fim da partida");
   } catch (err) {
-    logInfo("[ranking] snapshot failed, continuing with broadcast", { error: err.message });
+    logInfo("[event] MATCH ENDED broadcast failed, will retry", { error: err.message });
+    return;
   }
-  await broadcastTop(client, cfg, "fim da partida");
   remember(seenMatchEndEvents, currentMatchEndKey);
   state.lastMatchEndKey = currentMatchEndKey;
   state.lastMatchEndedAtMs = nowMs;
