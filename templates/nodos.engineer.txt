@@ -1,5 +1,5 @@
-COMANDO - NODOS
+ORDEM DO COMANDO
 
-Engenheiro, seu time precisa de nodos para vencer.
-Construa manpower, municao e combustivel o quanto antes.
-Preferencia: base/ultimo ponto, atras da segunda linha. Se o ponto da frente cair, nodos avancados somem.
+Engenheiro, seu time precisa de nodos agora.
+Construa manpower, municao e combustivel na base ou atras da segunda linha.
+Evite construir no ponto avancado: se a linha cair, os nodos somem.

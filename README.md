@@ -101,9 +101,10 @@ Este projeto organiza uma suíte de bots para servidores de Hell Let Loose conec
 </details>
 
 <details open>
-  <summary><strong>Nodos: comando <code>!n</code> / <code>!nodos</code> no chat</strong></summary>
+  <summary><strong>Nodos: comando <code>!nodos</code> e preview admin <code>!n</code></strong></summary>
 
-- permite uso pelo comandante do time ou pelo `ADMINISTRADOR_ID`;
+- permite `!nodos` apenas para o comandante do time;
+- permite `!n` apenas como preview administrativo com `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`;
 - identifica oficiais e engenheiros do mesmo time via `get_team_view`;
 - envia lembrete privado para oficiais cobrarem engenheiros;
 - envia lembrete privado para engenheiros construirem nodos na base/ultimo ponto.
@@ -188,7 +189,7 @@ src/runBots.js
 - Comandos administrativos de preview dependem de `ENABLE_TEST_COMMANDS=true` e `ADMINISTRADOR_ID`.
 - `!p`, `!tp` e `!t` sempre redirecionam a prévia por privado para o administrador, sem publicar no servidor.
 - `!op` é operacional: emissor e oficial do squad precisam usar prefixo de clã aceito.
-- `!n`/`!nodos` é operacional: comandante do time pode acionar; o administrador também pode acionar se estiver em um time.
+- `!nodos` é operacional: apenas o comandante do time pode acionar; `!n` é preview administrativo e redireciona os envios para o administrador.
 - O bot de performance tem estado próprio para processar cada `MATCH ENDED` uma única vez.
 - Cada processo usa arquivo de lock para impedir múltiplas instâncias respondendo ao mesmo tempo.
 
@@ -408,12 +409,21 @@ O comando `!op` nao verifica o estado real do outpost, porque o fluxo atual nao 
 
 ### 6. Comando `!n` / `!nodos`
 
-Quando o Top Bot encontra `!n` ou `!nodos`:
+Quando o Top Bot encontra `!nodos`:
 
 - consulta `get_team_view`;
-- valida se o emissor tem papel de comandante do time ou corresponde ao `ADMINISTRADOR_ID`;
+- valida se o emissor tem papel de comandante do time;
 - localiza oficiais e engenheiros do mesmo time;
-- envia mensagens privadas para esses jogadores pedindo construcao de nodos.
+- envia mensagens privadas para esses jogadores pedindo construcao de nodos;
+- envia confirmacao privada para o comandante.
+
+Quando o Top Bot encontra `!n`:
+
+- exige `ENABLE_TEST_COMMANDS=true` e emissor igual a `ADMINISTRADOR_ID`;
+- consulta `get_team_view` para identificar o time do administrador;
+- localiza oficiais e engenheiros do mesmo time;
+- redireciona todos os lembretes para o administrador, com indicacao do alvo original;
+- envia confirmacao privada de preview para o administrador.
 
 ### 7. Performance e VIP
 
@@ -443,7 +453,8 @@ Resumo do comando de nodos:
 
 | Comando | Requisito | Destino |
 | --- | --- | --- |
-| `!n` / `!nodos` | Comandante do time ou `ADMINISTRADOR_ID` presente em um time | Privado para oficiais e engenheiros do mesmo time |
+| `!nodos` | Comandante do time | Privado para oficiais e engenheiros do mesmo time |
+| `!n` | `ENABLE_TEST_COMMANDS=true`, emissor igual a `ADMINISTRADOR_ID` e administrador presente em um time | Privado para `ADMINISTRADOR_ID` |
 
 ### 8. Fallback de dados
 
@@ -476,6 +487,8 @@ O ranking usa `get_live_game_stats` por padrão. Se a resposta vier sem `stats`,
 | `TOP_BOT_ENABLED` | Não | `true` | Ativa o bot de `!top` no runner `npm run bots`. |
 | `OP_BOT_ENABLED` | Não | `true` | Ativa o comando `!op` dentro do Top Bot. |
 | `NODOS_BOT_ENABLED` | Não | `true` | Ativa os comandos `!n`/`!nodos` dentro do Top Bot. |
+| `NODOS_NOTIFY_OFFICERS` | Não | `true` | Quando `false`, o comando de nodos não envia mensagem para oficiais. |
+| `NODOS_NOTIFY_ENGINEERS` | Não | `true` | Quando `false`, o comando de nodos não envia mensagem para engenheiros. |
 | `PERFORMANCE_INFO_BOT_ENABLED` | Não | `true` | Ativa o bot informativo `!perf`/`!performance`. |
 | `PERFORMANCE_BOT_ENABLED` | Não | `false` | Ativa o bot de performance/VIP no runner. |
 | `ENABLE_TEST_COMMANDS` | Não | `false` | Ativa comandos administrativos privados, como `!t`, `!p`, `!tp`, `!classes` e métricas por classe. |
@@ -715,11 +728,11 @@ Confira se `RCON_API_TOKEN` e `RCON_BASE_URL` existem no `.env` e estão preench
 
 ### `!n` ou `!nodos` não enviam mensagens
 
-- confirme se o emissor é comandante do time ou é o `ADMINISTRADOR_ID`;
-- se for administrador, ele precisa aparecer em algum time no `get_team_view` para o bot saber qual time receberá os lembretes;
+- para `!nodos`, confirme se o emissor é comandante do time;
+- para `!n`, confirme `ENABLE_TEST_COMMANDS=true`, `ADMINISTRADOR_ID` e se o administrador aparece em algum time no `get_team_view`;
 - confirme se existem oficiais ou engenheiros no mesmo time;
 - revise o cooldown de `BOT_TOP_COMMAND_COOLDOWN_MS`, usado também para reduzir spam do comando de nodos;
-- confira se o terminal registrou `[nodos] !nodos validated`.
+- confira se o terminal registrou `[nodos] command validated`.
 
 ### O anúncio de fim de partida não saiu
 

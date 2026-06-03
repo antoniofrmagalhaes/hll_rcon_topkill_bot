@@ -76,6 +76,15 @@ function topCommandActorKey(log) {
   return `${playerId || playerName || "unknown"}|${content}`;
 }
 
+function isNodosAdminPreviewCommand(log, cfg) {
+  const content = normalizeText(log?.sub_content);
+  return (
+    Boolean(cfg.enableTestCommands) &&
+    isAdminActor(log, cfg) &&
+    (content === "!n" || content.startsWith("!n "))
+  );
+}
+
 function shouldSkipTopCommandByCooldown(log, cfg) {
   const actorKey = topCommandActorKey(log);
   const nowMs = Date.now();
@@ -791,7 +800,8 @@ async function pollLogs(client, cfg) {
     if (isNodosCommand(log)) {
       const commandKey = nodosCommandKey(log);
       if (seenNodosCommands.has(commandKey)) continue;
-      if (!cfg.nodosBotEnabled) {
+      const isAdminPreview = isNodosAdminPreviewCommand(log, cfg);
+      if (!cfg.nodosBotEnabled && !isAdminPreview) {
         remember(seenNodosCommands, commandKey);
         remember(seenChatEvents, key);
         logInfo("[event] !nodos ignored: nodos bot disabled in config", {
@@ -813,7 +823,7 @@ async function pollLogs(client, cfg) {
       remember(seenNodosCommands, commandKey);
       remember(seenChatEvents, key);
 
-      logInfo("[event] !nodos detected", {
+      logInfo("[event] nodos command detected", {
         byPlayer: log.player_name_1 || null,
         playerId: log.player_id_1 || null,
         content: log.sub_content || null,

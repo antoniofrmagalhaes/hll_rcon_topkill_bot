@@ -16,6 +16,13 @@ function isNodosCommand(log) {
   return content === "!n" || content.startsWith("!n ") || content === "!nodos" || content.startsWith("!nodos ");
 }
 
+function nodosCommandMode(log) {
+  const content = normalizeText(log?.sub_content);
+  if (content === "!n" || content.startsWith("!n ")) return "admin-preview";
+  if (content === "!nodos" || content.startsWith("!nodos ")) return "operational";
+  return null;
+}
+
 function nodosCommandKey(log) {
   const playerRef = normalizeId(log?.player_id_1) || normalizeText(log?.player_name_1) || "unknown";
   const normalizedRaw = normalizeText(log?.raw);
@@ -111,24 +118,51 @@ function summarizeRoles(players) {
 
 function formatNodosOfficerMessage() {
   const fallback = [
-    "COMANDO - NODOS",
+    "ORDEM DO COMANDO",
     "",
-    "Oficiais, cobrem seus engenheiros para construir nodos agora.",
-    "Nodos vencem partidas: eles mantem recursos para bombing, reforco, tanques e habilidades do comandante.",
-    "Orientem construir na base, atras da segunda linha, no quadrante do ultimo ponto.",
+    "Oficiais, orientem seus squads agora: precisamos de nodos ativos o quanto antes.",
+    "Cobrem seus engenheiros para construir manpower, municao e combustivel na base ou atras da segunda linha.",
+    "Nodos garantem recursos para bombing, reforco, tanques e habilidades do comandante.",
   ].join("\n");
   return renderMessageTemplate("nodos.officer.txt", {}, fallback);
 }
 
 function formatNodosEngineerMessage() {
   const fallback = [
-    "COMANDO - NODOS",
+    "ORDEM DO COMANDO",
     "",
-    "Engenheiro, seu time precisa de nodos para vencer.",
-    "Construa manpower, municao e combustivel o quanto antes.",
-    "Preferencia: base/ultimo ponto, atras da segunda linha. Se o ponto da frente cair, nodos avancados somem.",
+    "Engenheiro, seu time precisa de nodos agora.",
+    "Construa manpower, municao e combustivel na base ou atras da segunda linha.",
+    "Evite construir no ponto avancado: se a linha cair, os nodos somem.",
   ].join("\n");
   return renderMessageTemplate("nodos.engineer.txt", {}, fallback);
+}
+
+function formatNodosConfirmation({ preview, officers, engineers }) {
+  if (preview) {
+    return [
+      "Preview de nodos enviado apenas para o administrador.",
+      `Alvos simulados: ${officers} oficiais e ${engineers} engenheiros.`,
+    ].join("\n");
+  }
+
+  return [
+    "Nodos solicitados para oficiais e engenheiros do seu time.",
+    `Enviados: ${officers} oficiais e ${engineers} engenheiros.`,
+  ].join("\n");
+}
+
+function formatNodosPreviewMessage(targetType, target, message) {
+  const label = targetType === "officer" ? "OFICIAL" : "ENGENHEIRO";
+  const targetName = target?.playerName || "sem nome";
+  const targetId = target?.playerId || "sem id";
+
+  return [
+    `PREVIEW NODOS - ${label}`,
+    `Alvo original: ${targetName} (${targetId})`,
+    "",
+    message,
+  ].join("\n");
 }
 
 async function sendPrivate(client, target, message, by) {
@@ -144,11 +178,43 @@ async function sendPrivate(client, target, message, by) {
   return true;
 }
 
+async function sendAdminPreview(client, cfg, targetType, target, message) {
+  if (!cfg.adminId) return false;
+
+  await client.post("message_player", {
+    player_id: cfg.adminId,
+    player_name: "",
+    message: formatNodosPreviewMessage(targetType, target, message),
+    by: "hll-nodos-bot-preview",
+    save_message: false,
+  });
+  return true;
+}
+
 async function handleNodosCommand(client, cfg, log, logInfo) {
+  const mode = nodosCommandMode(log);
+  const isPreview = mode === "admin-preview";
   const requester = {
     playerId: normalizeId(log?.player_id_1),
     playerName: String(log?.player_name_1 || "").trim(),
   };
+
+  if (!mode) {
+    logInfo("[nodos] ignored: unknown nodos command mode", {
+      requester,
+      content: log?.sub_content || null,
+    });
+    return;
+  }
+
+  if (isPreview && (!cfg.enableTestCommands || requester.playerId !== cfg.adminId)) {
+    logInfo("[nodos] !n preview ignored: requester is not admin or test commands disabled", {
+      requester,
+      enableTestCommands: Boolean(cfg.enableTestCommands),
+      adminIdConfigured: Boolean(cfg.adminId),
+    });
+    return;
+  }
 
   let teamViewResponse;
   try {
@@ -169,25 +235,28 @@ async function handleNodosCommand(client, cfg, log, logInfo) {
   }
 
   const requesterIsCommander = isCommanderRole(requesterRow.role);
-  const requesterIsAdmin = Boolean(cfg.adminId && requester.playerId === cfg.adminId);
-  if (!requesterIsCommander && !requesterIsAdmin) {
-    logInfo("[nodos] !nodos ignored: requester is not commander or admin", {
+  if (!isPreview && !requesterIsCommander) {
+    logInfo("[nodos] !nodos ignored: requester is not commander", {
       requester,
       role: requesterRow.role,
       team: requesterRow.team,
-      adminIdConfigured: Boolean(cfg.adminId),
     });
     return;
   }
 
   const sameTeamPlayers = players.filter((player) => player.team === requesterRow.team);
-  const officers = uniqueByPlayerIdOrName(sameTeamPlayers.filter((player) => player.role === "officer"));
-  const engineers = uniqueByPlayerIdOrName(sameTeamPlayers.filter((player) => player.role === "engineer"));
+  const officers = cfg.nodosNotifyOfficers === false
+    ? []
+    : uniqueByPlayerIdOrName(sameTeamPlayers.filter((player) => player.role === "officer"));
+  const engineers = cfg.nodosNotifyEngineers === false
+    ? []
+    : uniqueByPlayerIdOrName(sameTeamPlayers.filter((player) => player.role === "engineer"));
   const officerMessage = formatNodosOfficerMessage();
   const engineerMessage = formatNodosEngineerMessage();
   const classesSummary = summarizeRoles(sameTeamPlayers);
 
-  logInfo("[nodos] !nodos validated", {
+  logInfo("[nodos] command validated", {
+    mode,
     requester: {
       playerId: requesterRow.playerId,
       playerName: requesterRow.playerName,
@@ -196,20 +265,27 @@ async function handleNodosCommand(client, cfg, log, logInfo) {
     },
     access: {
       requesterIsCommander,
-      requesterIsAdmin,
+      requesterIsAdmin: Boolean(cfg.adminId && requester.playerId === cfg.adminId),
     },
     recipients: {
       officers: officers.length,
       engineers: engineers.length,
+    },
+    notify: {
+      officers: cfg.nodosNotifyOfficers !== false,
+      engineers: cfg.nodosNotifyEngineers !== false,
     },
     classes: classesSummary,
   });
 
   if (cfg.dryRun) {
     logInfo("[nodos] dry-run active; reminders not sent", {
+      mode,
       team: requesterRow.team,
       officers: officers.length,
       engineers: engineers.length,
+      notifyOfficers: cfg.nodosNotifyOfficers !== false,
+      notifyEngineers: cfg.nodosNotifyEngineers !== false,
       officerMessage,
       engineerMessage,
     });
@@ -220,19 +296,40 @@ async function handleNodosCommand(client, cfg, log, logInfo) {
   let engineerSends = 0;
 
   for (const officer of officers) {
-    const sent = await sendPrivate(client, officer, officerMessage, "hll-nodos-bot");
+    const sent = isPreview
+      ? await sendAdminPreview(client, cfg, "officer", officer, officerMessage)
+      : await sendPrivate(client, officer, officerMessage, "hll-nodos-bot");
     if (sent) officerSends += 1;
   }
 
   for (const engineer of engineers) {
-    const sent = await sendPrivate(client, engineer, engineerMessage, "hll-nodos-bot");
+    const sent = isPreview
+      ? await sendAdminPreview(client, cfg, "engineer", engineer, engineerMessage)
+      : await sendPrivate(client, engineer, engineerMessage, "hll-nodos-bot");
     if (sent) engineerSends += 1;
   }
 
+  const confirmationTarget = isPreview
+    ? { playerId: cfg.adminId, playerName: "" }
+    : { playerId: requesterRow.playerId, playerName: requesterRow.playerName };
+  await sendPrivate(
+    client,
+    confirmationTarget,
+    formatNodosConfirmation({
+      preview: isPreview,
+      officers: officerSends,
+      engineers: engineerSends,
+    }),
+    isPreview ? "hll-nodos-bot-preview" : "hll-nodos-bot"
+  );
+
   logInfo("[nodos] reminders sent", {
+    mode,
     team: requesterRow.team,
     officers: officerSends,
     engineers: engineerSends,
+    notifyOfficers: cfg.nodosNotifyOfficers !== false,
+    notifyEngineers: cfg.nodosNotifyEngineers !== false,
   });
 }
 

@@ -33,6 +33,8 @@ function readEnv() {
     dryRun: String(process.env.BOT_DRY_RUN || "false").toLowerCase() === "true",
     opBotEnabled: String(process.env.OP_BOT_ENABLED || "true").toLowerCase() !== "false",
     nodosBotEnabled: String(process.env.NODOS_BOT_ENABLED || "true").toLowerCase() !== "false",
+    nodosNotifyOfficers: String(process.env.NODOS_NOTIFY_OFFICERS || "true").toLowerCase() !== "false",
+    nodosNotifyEngineers: String(process.env.NODOS_NOTIFY_ENGINEERS || "true").toLowerCase() !== "false",
     includeHeaderForTop: String(process.env.TOP_INCLUDE_HEADER || "true").toLowerCase() === "true",
     ...readAdminCommandConfig(process.env),
   };

@@ -1,5 +1,5 @@
-COMANDO - NODOS
+ORDEM DO COMANDO
 
-Oficiais, cobrem seus engenheiros para construir nodos agora.
-Nodos vencem partidas: eles mantem recursos para bombing, reforco, tanques e habilidades do comandante.
-Orientem construir na base, atras da segunda linha, no quadrante do ultimo ponto.
+Oficiais, orientem seus squads agora: precisamos de nodos ativos o quanto antes.
+Cobrem seus engenheiros para construir manpower, municao e combustivel na base ou atras da segunda linha.
+Nodos garantem recursos para bombing, reforco, tanques e habilidades do comandante.
